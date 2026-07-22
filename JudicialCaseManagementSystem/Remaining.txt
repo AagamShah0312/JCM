@@ -7,16 +7,3 @@ C:/Users/cebc/anaconda3/Scripts/activate
 
 Main website will run on localhost:3000 
 freellmapi will run on localhost:5173
-
-
-
-#LAWYER
-aagam0312@gmail.com
-Aagam%14884
-
-#Guest
-neha354_shah@yahoo.com
-Neha%1234
-
-#ADMIN
-Jaihind123@gmail.com
