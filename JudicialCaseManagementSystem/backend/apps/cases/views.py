@@ -138,8 +138,25 @@ class CaseViewSet(viewsets.ModelViewSet):
         case = self.get_object()
         serializer = CaseAssignmentSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(case=case)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            lawyer = serializer.validated_data['lawyer']
+            assignment_fields = {
+                key: value for key, value in serializer.validated_data.items()
+                if key not in ('case', 'lawyer')
+            }
+            assignment, created = CaseAssignment.objects.get_or_create(
+                case=case,
+                lawyer=lawyer,
+                defaults=assignment_fields,
+            )
+            if not created:
+                # Reuse the existing assignment instead of crashing on the
+                # (case, lawyer) unique constraint.
+                for key, value in assignment_fields.items():
+                    setattr(assignment, key, value)
+                assignment.is_active = True
+                assignment.save(update_fields=list(assignment_fields.keys()) + ['is_active', 'updated_at'])
+            output = CaseAssignmentSerializer(assignment).data
+            return Response(output, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['get'])

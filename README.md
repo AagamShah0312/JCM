@@ -35,7 +35,7 @@ A modern, secure, and scalable web-based platform for managing court case record
 - **Frontend**: React 18 + Tailwind CSS
 - **Database**: PostgreSQL 15
 - **Cache**: Redis 7
-- **AI/LLM**: OpenAI GPT-4 or Ollama (local)
+- **AI/LLM**: Google Gemini (via google-generativeai SDK)
 - **Vector DB**: FAISS or Pinecone
 - **Task Queue**: Celery + Redis
 - **Containerization**: Docker + Docker Compose

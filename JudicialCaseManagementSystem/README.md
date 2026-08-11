@@ -16,9 +16,23 @@ A Django REST Framework and React application for court case management, hearing
 - AI assistant reads extracted text from uploaded documents and images when OCR dependencies are available.
 - AI assistant can answer general questions, but avoids direct verdicts or opinions on who should win a case.
 
+### Gemini API Key
+
+The AI assistant uses Google Gemini. Get a free API key at
+https://aistudio.google.com/apikey and add it to the backend environment:
+
+```bat
+:: JudicialCaseManagementSystem\.env  (copy from .env.example)
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+The AI features work without running any extra service — the backend talks to
+Gemini directly through the `google-generativeai` SDK.
+
 ## Run Locally
 
-Open three terminals.
+Open two terminals.
 
 ### Backend
 
@@ -40,16 +54,6 @@ npm start
 ```
 
 Main app: `http://localhost:3000`
-
-### FreeLLMAPI
-
-```bat
-cd freellmapi
-npm install
-npm run dev
-```
-
-FreeLLMAPI: `http://localhost:5173`
 
 ## CSV Import Format
 

@@ -221,9 +221,10 @@ OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
 USE_LOCAL_LLM = config('USE_LOCAL_LLM', default=False, cast=bool)
 OLLAMA_BASE_URL = config('OLLAMA_BASE_URL', default='http://localhost:11434')
 
-# FreeLLMAPI Settings
-AI_API_URL = config('AI_API_URL', default='http://localhost:3001/v1')
-AI_API_KEY = config('AI_API_KEY', default='')
+# Gemini Settings
+# Get a free API key at https://aistudio.google.com/apikey
+GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-2.5-flash')
 
 # Vector Database
 VECTOR_DB_TYPE = config('VECTOR_DB_TYPE', default='faiss')  # 'faiss' or 'pinecone'

@@ -198,20 +198,20 @@ GRANT ALL PRIVILEGES ON DATABASE judicial_case_db TO judicial_user;
 
 ## AI/LLM Configuration
 
-### OpenAI Setup
+### Gemini Setup
 
 1. **Get API Key**
-   - Sign up at https://platform.openai.com
-   - Go to API keys section
-   - Create new secret key
+   - Go to https://aistudio.google.com/apikey
+   - Create a free API key
 
 2. **Update .env**
    ```env
-   OPENAI_API_KEY=sk-xxx...
-   USE_LOCAL_LLM=False
+   GEMINI_API_KEY=your-gemini-api-key
+   GEMINI_MODEL=gemini-2.5-flash
    ```
 
-3. **Backend code will automatically use GPT-4**
+3. **Backend code will automatically use Gemini**
+   - No extra service is needed; the backend talks to Gemini directly via the `google-generativeai` SDK.
 
 ### Local LLM with Ollama
 
@@ -354,9 +354,10 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 
 ### AI Assistant Not Working
 
-**Check 1**: Is OpenAI key valid?
+**Check 1**: Is the Gemini key configured?
 ```bash
-curl -H "Authorization: Bearer $OPENAI_API_KEY" https://api.openai.com/v1/models
+# Ensure GEMINI_API_KEY is set in .env, then from the backend folder:
+python -c "from services.ai_service import get_gemini_api_key; print('key set' if get_gemini_api_key() else 'GEMINI_API_KEY missing in .env')"
 ```
 
 **Check 2**: Are documents processed?

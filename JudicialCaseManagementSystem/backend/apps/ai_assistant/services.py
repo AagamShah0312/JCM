@@ -9,7 +9,7 @@ from django.conf import settings
 
 from apps.cases.models import Case
 from apps.documents.models import CaseDocument
-from services.ai_service import ask_ai
+from services.ai_service import ask_gemini
 
 logger = logging.getLogger(__name__)
 
@@ -86,16 +86,16 @@ class DocumentProcessor:
 
 
 class RAGService:
-    """Retrieval-Augmented Generation service backed by the existing FreeLLMAPI wrapper."""
+    """Retrieval-Augmented Generation service backed by Google Gemini."""
 
     def __init__(self):
         self.use_local_llm = settings.USE_LOCAL_LLM
         self.ollama_base_url = settings.OLLAMA_BASE_URL
         self.openai_api_key = settings.OPENAI_API_KEY
 
-    def _call_llm(self, prompt: str, model: str = 'gpt-3.5-turbo') -> str:
+    def _call_llm(self, prompt: str, model: str | None = None) -> str:
         try:
-            return (ask_ai(prompt) or "").strip()
+            return (ask_gemini(prompt, model=model) or "").strip()
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
             return "[LLM error] Unable to produce response"

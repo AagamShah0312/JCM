@@ -15,7 +15,9 @@ class CaseTimelineSerializer(serializers.ModelSerializer):
         model = CaseTimeline
         fields = ['id', 'case', 'event_type', 'event_description', 'event_date', 
                   'notes', 'created_by', 'created_by_details', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        # 'case' is injected by the view (e.g. /cases/{id}/add_timeline_event/),
+        # so it must not be required from the request payload.
+        read_only_fields = ['id', 'case', 'created_at', 'updated_at']
 
 
 class CaseAssignmentSerializer(serializers.ModelSerializer):
@@ -27,7 +29,8 @@ class CaseAssignmentSerializer(serializers.ModelSerializer):
         model = CaseAssignment
         fields = ['id', 'case', 'lawyer', 'lawyer_details', 'assigned_date', 'role', 
                   'is_active', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'assigned_date', 'created_at', 'updated_at']
+        # 'case' is injected by the view (e.g. /cases/{id}/assign_lawyer/).
+        read_only_fields = ['id', 'case', 'assigned_date', 'created_at', 'updated_at']
 
 
 class CaseNoteSerializer(serializers.ModelSerializer):
@@ -39,7 +42,8 @@ class CaseNoteSerializer(serializers.ModelSerializer):
         model = CaseNote
         fields = ['id', 'case', 'author', 'author_details', 'content', 'is_public', 
                   'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        # 'case' is injected by the view (e.g. POST /cases/{id}/notes/).
+        read_only_fields = ['id', 'case', 'created_at', 'updated_at']
 
 
 class CaseListSerializer(serializers.ModelSerializer):

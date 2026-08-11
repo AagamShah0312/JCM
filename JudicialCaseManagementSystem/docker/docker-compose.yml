@@ -49,6 +49,8 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - CELERY_BROKER_URL=redis://redis:6379/0
     depends_on:
       - db

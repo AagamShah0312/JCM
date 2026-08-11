@@ -44,6 +44,7 @@ git push
    DATABASE_URL=<from-PostgreSQL-service>
    ALLOWED_HOSTS=your-app.onrender.com
    OPENAI_API_KEY=<your-key>
+   GEMINI_API_KEY=<your-gemini-key>
    ```
 
 ### Step 4: Create Frontend Web Service
@@ -236,6 +237,7 @@ az webapp config appsettings set \
   SECRET_KEY=<key> \
   DATABASE_URL=<postgresql-url> \
   OPENAI_API_KEY=<key>
+  GEMINI_API_KEY=<your-gemini-key>
 ```
 
 ### Step 5: Deploy Frontend
@@ -337,6 +339,7 @@ ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
 DATABASE_URL=postgresql://user:password@host:port/dbname
 REDIS_URL=redis://user:password@host:port/0
 OPENAI_API_KEY=sk-xxxxx
+GEMINI_API_KEY=your-gemini-key
 USE_LOCAL_LLM=False
 CELERY_BROKER_URL=redis://host:port/0
 SECURE_SSL_REDIRECT=True

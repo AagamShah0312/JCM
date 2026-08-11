@@ -2,13 +2,14 @@ To implement AI more strongly i.e., Read uploaded files if asked by the user and
 # How to RUN
 1 Terminal--> go to JudicialCaseManagementSystem/frontend and run npm start
 2 Terminal--> Go to JudicialCaseManagementSystem/backend and run python manage.py runserver
-3 Terminal--> Go to freellmapi and run npm run dev
 C:/Users/cebc/anaconda3/Scripts/activate
 
-Main website will run on localhost:3000 
-freellmapi will run on localhost:5173
+Main website will run on localhost:3000
 
-
+# AI (Gemini)
+Add your Gemini API key to JudicialCaseManagementSystem/.env:
+GEMINI_API_KEY=
+(Get a free key at https://aistudio.google.com/apikey)
 
 #LAWYER
 aagam0312@gmail.com
