@@ -72,7 +72,8 @@ def retrieve_for_query(user, case, query, top_k=MAX_CHUNKS_RETRIEVED):
                     'text': chunk.text,
                     'score': max(0.0, 1.0 - float(chunk.distance)),
                 })
-            return results
+            if results:
+                return results
     except Exception as exc:
         logger.warning(f"Vector retrieval failed ({exc}); falling back to keyword")
 
