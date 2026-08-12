@@ -33,6 +33,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, roles: ['admin', 'judge', 'lawyer'] },
     { href: '/cases', label: 'Cases', icon: <FolderOpen size={18} />, roles: ['admin', 'judge', 'lawyer'] },
     { href: '/cause-list', label: 'Cause List', icon: <CalendarDays size={18} />, roles: ['admin', 'judge', 'lawyer'] },
+    { href: '/calendar', label: 'Calendar', icon: <CalendarDays size={18} />, roles: ['admin', 'judge', 'lawyer'] },
     { href: '/tasks', label: 'Tasks', icon: <FileText size={18} />, roles: ['admin', 'judge', 'lawyer'] },
     { href: '/admin/analytics', label: 'Analytics', icon: <BarChart3 size={18} />, roles: ['admin'] },
     { href: '/admin/csv', label: 'CSV Import', icon: <Upload size={18} />, roles: ['admin'] },
@@ -98,6 +99,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <p className="text-sm font-medium text-slate-800">{user.first_name || user.email}</p>
                   <p className="text-[11px] uppercase text-slate-400">{user.role}</p>
                 </div>
+                <Link href="/settings" className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" title="Settings">
+                  <Settings size={18} />
+                </Link>
                 <button onClick={handleLogout} className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" title="Logout">
                   <LogOut size={18} />
                 </button>

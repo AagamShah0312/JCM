@@ -184,6 +184,7 @@ function TimelineTab({ events, loading }: { events: any[]; loading: boolean }) {
 function HearingsTab({ caseId, hearings, loading, canEdit }: { caseId: string; hearings: Hearing[]; loading: boolean; canEdit: boolean }) {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [selectedHearing, setSelectedHearing] = useState<Hearing | null>(null);
   const [form, setForm] = useState<any>({ date: '', hearing_type: 'FIRST', purpose: '' });
   const createH = useMutation({
     mutationFn: (d: any) => hearingsApi.create({ case: caseId, ...d }),
@@ -242,20 +243,118 @@ function HearingsTab({ caseId, hearings, loading, canEdit }: { caseId: string; h
             {h.adjournment_reason && <p className="mt-2 text-xs text-amber-600">Adjourned: {h.adjournment_reason}</p>}
             {h.next_hearing_date && <p className="mt-1 text-xs text-slate-500">Next: {formatDate(h.next_hearing_date)}</p>}
 
-            {canEdit && h.status === 'SCHEDULED' && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button className="btn-secondary text-xs" onClick={() => {
-                  const nd = prompt('New date (YYYY-MM-DD):', h.date);
-                  if (nd) reschedule.mutate({ hid: h.id, d: { new_date: nd } });
-                }}>Reschedule</button>
-                <button className="btn-secondary text-xs" onClick={() => {
-                  const summary = prompt('Proceedings summary:');
-                  if (summary !== null) complete.mutate({ hid: h.id, d: { summary } });
-                }}>Complete + Record</button>
-              </div>
-            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button className="btn-secondary text-xs" onClick={() => setSelectedHearing(h)}>Details & participants</button>
+              {canEdit && h.status === 'SCHEDULED' && (
+                <>
+                  <button className="btn-secondary text-xs" onClick={() => {
+                    const nd = prompt('New date (YYYY-MM-DD):', h.date);
+                    if (nd) reschedule.mutate({ hid: h.id, d: { new_date: nd } });
+                  }}>Reschedule</button>
+                  <button className="btn-secondary text-xs" onClick={() => {
+                    const summary = prompt('Proceedings summary:');
+                    if (summary !== null) complete.mutate({ hid: h.id, d: { summary } });
+                  }}>Complete + Record</button>
+                </>
+              )}
+            </div>
           </Card>
         ))}
+      </div>
+
+      {selectedHearing && (
+        <HearingDetailModal
+          hearing={selectedHearing}
+          onClose={() => setSelectedHearing(null)}
+          canEdit={canEdit}
+        />
+      )}
+    </div>
+  );
+}
+
+function HearingDetailModal({ hearing, onClose, canEdit }: { hearing: Hearing; onClose: () => void; canEdit: boolean }) {
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('witness');
+  const [status, setStatus] = useState('PRESENT');
+  const [adding, setAdding] = useState(false);
+
+  const addParticipant = async () => {
+    if (!name.trim()) return;
+    setAdding(true);
+    try {
+      await hearingsApi.createParticipant(hearing.id, { name: name.trim(), role, status });
+      setName('');
+      window.dispatchEvent(new CustomEvent('hearing-updated'));
+      onClose();
+    } catch {
+      /* keep modal open */
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const procs = hearing.proceedings || [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-start justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Hearing #{hearing.hearing_number}</h3>
+            <p className="text-sm text-slate-500">{formatDate(hearing.date)} {hearing.start_time ? `· ${hearing.start_time}` : ''}</p>
+            <p className="mt-1 text-sm text-slate-600">{hearing.hearing_type}{hearing.purpose ? ` — ${hearing.purpose}` : ''}</p>
+          </div>
+          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">✕</button>
+        </div>
+
+        <div className="mb-3 flex flex-wrap gap-2 text-xs">
+          <StatusBadge status={hearing.status} />
+          {hearing.adjournment_reason && <Badge tone="amber">Adjourned: {hearing.adjournment_reason}</Badge>}
+        </div>
+
+        {procs.length > 0 && (
+          <div className="mb-4 rounded-md bg-slate-50 p-3">
+            <p className="mb-1 text-xs font-semibold uppercase text-slate-400">Proceedings</p>
+            {procs.map((p) => (
+              <div key={p.id} className="text-sm text-slate-700">
+                {p.summary && <p>{p.summary}</p>}
+                {p.directions && <p className="mt-1"><b>Directions:</b> {p.directions}</p>}
+                {p.next_action && <p className="mt-1"><b>Next action:</b> {p.next_action}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="mb-2 text-xs font-semibold uppercase text-slate-400">Participants ({hearing.participants?.length || 0})</p>
+        <ul className="mb-4 space-y-1.5">
+          {(hearing.participants || []).map((p) => (
+            <li key={p.id} className="flex items-center justify-between rounded border border-slate-100 px-3 py-1.5 text-sm">
+              <span className="font-medium text-slate-700">{p.name || '—'}</span>
+              <span className="flex items-center gap-2">
+                <Badge tone="slate">{p.role}</Badge>
+                <Badge tone={p.status === 'PRESENT' ? 'green' : p.status === 'ABSENT' ? 'red' : 'amber'}>{p.status}</Badge>
+              </span>
+            </li>
+          ))}
+          {(hearing.participants || []).length === 0 && <li className="text-sm text-slate-400">No participants recorded.</li>}
+        </ul>
+
+        {canEdit && (
+          <div className="rounded-md border border-slate-100 p-3">
+            <p className="mb-2 text-xs font-semibold uppercase text-slate-400">Add participant</p>
+            <div className="flex flex-wrap gap-2">
+              <input className="input flex-1" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+              <select className="input sm:w-36" value={role} onChange={(e) => setRole(e.target.value)}>
+                {['judge', 'lawyer', 'petitioner', 'respondent', 'witness', 'court_staff', 'other'].map((r) => <option key={r}>{r}</option>)}
+              </select>
+              <select className="input sm:w-32" value={status} onChange={(e) => setStatus(e.target.value)}>
+                {['PRESENT', 'ABSENT', 'REPRESENTED', 'EXCUSED'].map((s) => <option key={s}>{s}</option>)}
+              </select>
+              <button className="btn-primary" disabled={adding || !name.trim()} onClick={addParticipant}>Add</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -343,6 +442,7 @@ function DocumentsTab({ caseId, docs, loading, canEdit }: { caseId: string; docs
 function OrdersTab({ caseId, orders, loading, canEdit }: { caseId: string; orders: Order[]; loading: boolean; canEdit: boolean }) {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [compareOrder, setCompareOrder] = useState<Order | null>(null);
   const [form, setForm] = useState<any>({ title: '', order_type: 'INTERIM', date: new Date().toISOString().slice(0, 10), summary: '' });
   const createO = useMutation({
     mutationFn: (d: any) => ordersApi.create({ case: caseId, ...d }),
@@ -392,13 +492,99 @@ function OrdersTab({ caseId, orders, loading, canEdit }: { caseId: string; order
                 {canEdit && o.status === 'DRAFT' && (
                   <button className="btn-secondary mt-1 text-xs" onClick={() => publishO.mutate(o.id)}>Publish</button>
                 )}
+                {(o.versions || []).length >= 2 && (
+                  <button className="btn-secondary mt-1 text-xs" onClick={() => setCompareOrder(o)}>Compare versions</button>
+                )}
               </div>
             </div>
           </Card>
         ))}
       </div>
+
+      {compareOrder && (
+        <OrderCompareModal order={compareOrder} onClose={() => setCompareOrder(null)} />
+      )}
     </div>
   );
+}
+
+function OrderCompareModal({ order, onClose }: { order: Order; onClose: () => void }) {
+  const versions = (order.versions || []).slice().sort((a, b) => a.version_number - b.version_number);
+  const [a, setA] = useState(versions[0]?.version_number ?? 0);
+  const [b, setB] = useState(versions[versions.length - 1]?.version_number ?? 0);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+
+  const run = async () => {
+    setLoading(true);
+    setResult(null);
+    try {
+      const orderId = order.id;
+      const r = await documentsApiCompare(orderId, a, b);
+      setResult(r.data);
+    } catch {
+      /* show empty */
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-start justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Compare versions — {order.title}</h3>
+            <p className="text-xs text-slate-400">Document version comparison (spec §40)</p>
+          </div>
+          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">✕</button>
+        </div>
+
+        <div className="mb-4 flex items-end gap-2">
+          <div>
+            <label className="label">Version A</label>
+            <select className="input sm:w-32" value={a} onChange={(e) => setA(Number(e.target.value))}>
+              {versions.map((v) => <option key={v.version_number} value={v.version_number}>v{v.version_number}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Version B</label>
+            <select className="input sm:w-32" value={b} onChange={(e) => setB(Number(e.target.value))}>
+              {versions.map((v) => <option key={v.version_number} value={v.version_number}>v{v.version_number}</option>)}
+            </select>
+          </div>
+          <button className="btn-primary" disabled={loading || a === b} onClick={run}>
+            {loading ? 'Comparing…' : 'Compare'}
+          </button>
+        </div>
+
+        {result && (
+          <div className="space-y-3 text-sm">
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="mb-1 text-xs font-semibold uppercase text-slate-400">Machine diff</p>
+              <pre className="whitespace-pre-wrap text-slate-700">{result.diff?.summary || 'No differences.'}</pre>
+            </div>
+            {result.ai_explanation && (
+              <div className="rounded-md border border-violet-100 bg-violet-50 p-3 text-violet-800">
+                <p className="mb-1 text-xs font-semibold uppercase text-violet-400">AI explanation (advisory)</p>
+                {result.ai_explanation}
+              </div>
+            )}
+            <p className="text-xs text-slate-400">{result.warning}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+async function documentsApiCompare(orderId: string, versionA: number, versionB: number) {
+  // Order versions map to documents; reuse the documents compare endpoint shape.
+  // For orders, call the order detail to get its document, then compare.
+  const order = await ordersApi.retrieve(orderId);
+  const docId = order.data.document;
+  if (!docId) throw new Error('Order has no attached document');
+  return documentsApi.compare(docId, versionA, versionB);
 }
 
 function PartiesTab({ caseId, canEdit }: { caseId: string; canEdit: boolean }) {

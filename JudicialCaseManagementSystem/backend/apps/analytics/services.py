@@ -230,6 +230,7 @@ def calendar_events_for_user(user, start, end):
         events.append({
             'type': 'hearing',
             'id': str(h.id),
+            'case_id': str(h.case_id),
             'case_number': h.case.case_number,
             'title': f"Hearing #{h.hearing_number} — {h.case.case_number}",
             'date': h.date.isoformat(),

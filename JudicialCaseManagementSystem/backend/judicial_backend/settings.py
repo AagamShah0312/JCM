@@ -295,3 +295,20 @@ AI_EMBEDDING_MODEL = config('AI_EMBEDDING_MODEL', default=EMBEDDING_MODEL)
 
 # Request ID middleware / logging
 REQUEST_ID_HEADER = 'HTTP_X_REQUEST_ID'
+
+# Observability — Sentry (optional; no-op without SENTRY_DSN)
+SENTRY_DSN = config('SENTRY_DSN', default='')
+SENTRY_TRACES_SAMPLE_RATE = float(config('SENTRY_TRACES_SAMPLE_RATE', default=0.1))
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[DjangoIntegration()],
+            traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+            send_default_pii=False,
+        )
+    except Exception:
+        # Sentry must never block startup if misconfigured.
+        pass

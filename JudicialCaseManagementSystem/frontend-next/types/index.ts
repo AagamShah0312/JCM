@@ -117,6 +117,7 @@ export interface Order {
   status: string;
   visibility: string;
   is_public: boolean;
+  document?: string | null;
   versions?: OrderVersion[];
 }
 
