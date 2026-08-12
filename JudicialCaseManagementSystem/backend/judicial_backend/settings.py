@@ -312,3 +312,6 @@ if SENTRY_DSN:
     except Exception:
         # Sentry must never block startup if misconfigured.
         pass
+
+# MFA-ready architecture (spec §46): provider not bundled; flag gates enrollment
+MFA_ENABLED = config('MFA_ENABLED', default=False, cast=bool)

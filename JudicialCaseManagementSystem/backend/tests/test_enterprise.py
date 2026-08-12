@@ -285,6 +285,95 @@ class HearingParticipantTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class MFASecurityTests(APITestCase):
+    """MFA-ready hook (spec §46): status endpoint + model."""
+
+    def setUp(self):
+        self.admin, *_ = make_users()
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def test_mfa_status_endpoint(self):
+        self._auth(self.admin)
+        resp = self.client.get('/api/auth/mfa/status/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('mfa_available', resp.data)
+        self.assertIn('providers_supported', resp.data)
+        self.assertEqual(resp.data['mfa_enabled'], False)
+
+    def test_mfa_requires_auth(self):
+        resp = self.client.get('/api/auth/mfa/status/')
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_two_factor_model(self):
+        from apps.authentication.models import TwoFactorAuth
+        tf = TwoFactorAuth.objects.create(user=self.admin, is_enabled=True, provider='totp')
+        self.assertTrue(tf.is_enabled)
+        self.assertEqual(tf.provider, 'totp')
+
+
+class CSVErrorReportTests(APITestCase):
+    """CSV import downloadable error report (spec §12)."""
+
+    def setUp(self):
+        self.admin, *_ = make_users()
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def test_error_report_returns_csv(self):
+        import io
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self._auth(self.admin)
+        resp = self.client.post('/api/auth/csv/error-report/', {
+            'type': 'staff',
+            'role': 'judge',
+            'file': SimpleUploadedFile('bad.csv', b'id,email,first_name,last_name\nJ-1,not-an-email,Bad,Row\n'),
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp['Content-Type'], 'text/csv')
+        self.assertIn('Valid email is required', resp.content.decode())
+
+    def test_error_report_admin_only(self):
+        import io
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from apps.authentication.models import User
+        judge = User.objects.create_user(username='jdgx', email='jdgx@example.com', password='Passw0rd!x', role='judge')
+        self._auth(judge)
+        resp = self.client.post('/api/auth/csv/error-report/', {
+            'type': 'staff', 'role': 'judge',
+            'file': SimpleUploadedFile('bad.csv', b'id,email\n'),
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class SchedulingSuggestionTests(APITestCase):
+    """Smart hearing scheduling suggestions (spec §44)."""
+
+    def setUp(self):
+        self.admin, self.judge, self.other_judge, self.lawyer, *_ = make_users()
+        self.case = make_case(self.admin, self.judge, self.lawyer)
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def test_suggestions_returned(self):
+        self._auth(self.judge)
+        resp = self.client.get(f'/api/analytics/cases/{self.case.id}/scheduling-suggestions/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(resp.data['suggestions']), 1)
+        self.assertIn('conflicts', resp.data['suggestions'][0])
+        self.assertIn('recommended', resp.data['suggestions'][0])
+
+    def test_suggestions_require_auth(self):
+        from apps.authentication.models import User
+        stranger = User.objects.create_user(username='stranger', email='stranger@example.com', password='Passw0rd!x', role='lawyer')
+        self._auth(stranger)
+        resp = self.client.get(f'/api/analytics/cases/{self.case.id}/scheduling-suggestions/')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class CalendarEventTests(APITestCase):
     """Calendar endpoint returns case_id for deep links (spec §27)."""
 

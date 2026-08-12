@@ -186,6 +186,12 @@ function HearingsTab({ caseId, hearings, loading, canEdit }: { caseId: string; h
   const [showForm, setShowForm] = useState(false);
   const [selectedHearing, setSelectedHearing] = useState<Hearing | null>(null);
   const [form, setForm] = useState<any>({ date: '', hearing_type: 'FIRST', purpose: '' });
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestions = useQuery({
+    queryKey: ['scheduling-suggestions', caseId],
+    queryFn: () => analyticsApi.scheduling(caseId).then((r) => r.data),
+    enabled: showSuggestions,
+  });
   const createH = useMutation({
     mutationFn: (d: any) => hearingsApi.create({ case: caseId, ...d }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['case-hearings'] }); setShowForm(false); toast.success('Hearing scheduled'); },
@@ -223,9 +229,50 @@ function HearingsTab({ caseId, hearings, loading, canEdit }: { caseId: string; h
             </div>
             <div className="md:col-span-2"><label className="label">Purpose</label><input className="input" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} /></div>
           </div>
-          <button className="btn-primary mt-3" disabled={!form.date || createH.isPending} onClick={() => createH.mutate(form)}>
-            {createH.isPending ? 'Scheduling…' : 'Schedule'}
-          </button>
+          <div className="mt-3 flex items-center gap-3">
+            <button className="btn-primary" disabled={!form.date || createH.isPending} onClick={() => createH.mutate(form)}>
+              {createH.isPending ? 'Scheduling…' : 'Schedule'}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={() => setShowSuggestions((v) => !v)}
+            >
+              {showSuggestions ? 'Hide suggestions' : 'Suggest dates (no conflicts)'}
+            </button>
+          </div>
+
+          {showSuggestions && (
+            <div className="mt-4 rounded-md border border-brand-100 bg-brand-50/40 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-brand-600">
+                Scheduling assistance (spec §44) — judge makes the final decision
+              </p>
+              {suggestions.isLoading && <p className="text-sm text-slate-400">Loading suggestions…</p>}
+              {suggestions.data && (
+                <div className="flex flex-wrap gap-2">
+                  {suggestions.data.suggestions?.map((s: any) => (
+                    <button
+                      key={s.date}
+                      type="button"
+                      onClick={() => setForm({ ...form, date: s.date })}
+                      className={`rounded-md border px-3 py-1.5 text-sm transition ${
+                        s.recommended
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                          : 'border-amber-200 bg-white text-slate-600 hover:bg-amber-50'
+                      }`}
+                    >
+                      {s.date.split('-').reverse().slice(0, 2).join('/')}
+                      <span className="ml-1 text-xs text-slate-400">
+                        {s.conflicts === 0 ? '✓ free' : `${s.conflicts} conflict${s.conflicts > 1 ? 's' : ''}`}
+                      </span>
+                      {s.recommended && <span className="ml-1 text-[10px] font-bold text-emerald-600">RECOMMENDED</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {suggestions.data?.note && <p className="mt-2 text-xs text-slate-400">{suggestions.data.note}</p>}
+            </div>
+          )}
         </Card>
       )}
 
@@ -381,13 +428,21 @@ function ProceedingsTab({ hearings, loading }: { hearings: Hearing[]; loading: b
 function DocumentsTab({ caseId, docs, loading, canEdit }: { caseId: string; docs: CaseDocument[]; loading: boolean; canEdit: boolean }) {
   const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
+  const [docType, setDocType] = useState('other');
+  const [docVisibility, setDocVisibility] = useState('LAWYER_ONLY');
+  const [docDescription, setDocDescription] = useState('');
   const upload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploading(true);
     try {
       const arr = Array.from(files);
-      await documentsApi.upload(caseId, arr, { document_type: 'other' });
+      await documentsApi.upload(caseId, arr, {
+        document_type: docType,
+        visibility: docVisibility,
+        description: docDescription,
+      });
       qc.invalidateQueries({ queryKey: ['case-docs'] });
+      setDocDescription('');
       toast.success(`${arr.length} document(s) uploaded; processing started`);
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message || 'Upload failed');
@@ -408,12 +463,38 @@ function DocumentsTab({ caseId, docs, loading, canEdit }: { caseId: string; docs
   return (
     <div className="space-y-4">
       {canEdit && (
-        <div className="flex items-center gap-2">
-          <label className="btn-primary cursor-pointer">
-            <Upload size={16} /> {uploading ? 'Uploading…' : 'Upload Documents'}
-            <input type="file" multiple className="hidden" onChange={(e) => upload(e.target.files)} disabled={uploading} />
-          </label>
-        </div>
+        <Card className="mb-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div>
+              <label className="label">Document type</label>
+              <select className="input" value={docType} onChange={(e) => setDocType(e.target.value)}>
+                {['petition', 'reply', 'affidavit', 'evidence', 'written_submission', 'order', 'judgment', 'proceedings', 'annexure', 'statement', 'other'].map((t) => (
+                  <option key={t} value={t}>{t.replace('_', ' ')}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Visibility</label>
+              <select className="input" value={docVisibility} onChange={(e) => setDocVisibility(e.target.value)}>
+                <option value="PUBLIC">Public</option>
+                <option value="LAWYER_ONLY">Lawyers only</option>
+                <option value="JUDGE_ONLY">Judge only</option>
+                <option value="RESTRICTED">Restricted</option>
+                <option value="ADMIN_ONLY">Admin only</option>
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="label">Description</label>
+              <input className="input" placeholder="Short description…" value={docDescription} onChange={(e) => setDocDescription(e.target.value)} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className="btn-primary cursor-pointer">
+              <Upload size={16} /> {uploading ? 'Uploading…' : 'Upload Documents'}
+              <input type="file" multiple className="hidden" onChange={(e) => upload(e.target.files)} disabled={uploading} />
+            </label>
+          </div>
+        </Card>
       )}
       {docs.length === 0 && <EmptyState title="No documents" message="Uploaded documents (PDF, DOCX, images, text) are processed for search and the AI assistant." />}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

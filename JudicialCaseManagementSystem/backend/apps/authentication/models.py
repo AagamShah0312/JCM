@@ -103,3 +103,35 @@ class LawyerProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.get_full_name() or self.user.email} ({self.bar_registration_number})"
+
+
+class TwoFactorAuth(models.Model):
+    """
+    MFA-ready hook (spec §46). The platform ships with the data model and
+    verification interface; the actual TOTP/WebAuthn provider is pluggable
+    (e.g. django-otp, pyotp + qrcode). When MFA is enabled for a user, a
+    challenge is required after password authentication.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='two_factor')
+    is_enabled = models.BooleanField(default=False)
+    provider = models.CharField(
+        max_length=30,
+        choices=[
+            ('totp', 'TOTP (authenticator app)'),
+            ('webauthn', 'WebAuthn / Passkey'),
+            ('sms', 'SMS OTP'),
+            ('email', 'Email OTP'),
+        ],
+        default='totp',
+    )
+    secret_encrypted = models.TextField(blank=True, help_text='Provider secret (encrypted at rest)')
+    verified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['user', 'is_enabled'])]
+
+    def __str__(self):
+        return f"2FA {'enabled' if self.is_enabled else 'disabled'} for {self.user.email}"

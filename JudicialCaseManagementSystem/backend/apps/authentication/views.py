@@ -5,6 +5,7 @@ from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils.decorators import method_decorator
@@ -374,3 +375,59 @@ class CaseCSVImportConfirmView(generics.GenericAPIView):
                      ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'),
                      request_id=getattr(request, 'request_id', ''))
         return Response({'created': created, 'report': report})
+
+
+class CSVErrorReportView(generics.GenericAPIView):
+    """
+    Return the row-level validation errors from a CSV as a downloadable CSV
+    report (spec §12: 'Optionally provide downloadable error report').
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role != 'admin':
+            raise PermissionDenied('Only admins can generate CSV error reports')
+        import_type = request.data.get('type', 'staff')
+        role = request.data.get('role', 'judge')
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'error': 'file is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .csv_import import preview_staff_csv, preview_case_csv
+        result = preview_staff_csv(file_obj, role) if import_type == 'staff' else preview_case_csv(file_obj)
+
+        # Build CSV
+        import csv as _csv
+        import io as _io
+        buf = _io.StringIO()
+        writer = _csv.writer(buf)
+        writer.writerow(['row', 'field', 'message'])
+        for err in result.errors:
+            writer.writerow([err.get('row', ''), err.get('field', ''), err.get('message', '')])
+
+        from django.http import HttpResponse
+        resp = HttpResponse(buf.getvalue(), content_type='text/csv')
+        resp['Content-Disposition'] = f'attachment; filename="csv_import_errors_{import_type}.csv"'
+        return resp
+
+
+class TwoFactorStatusView(generics.GenericAPIView):
+    """
+    MFA status for the current user (spec §46, MFA-ready architecture).
+    Returns whether 2FA is available/enabled and the supported providers.
+    The verification flow itself is intentionally not implemented until a
+    provider (TOTP/WebAuthn) is configured.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.conf import settings
+        user = request.user
+        two_factor = getattr(user, 'two_factor', None)
+        return Response({
+            'mfa_available': bool(getattr(settings, 'MFA_ENABLED', False)),
+            'mfa_enabled': bool(two_factor and two_factor.is_enabled),
+            'provider': two_factor.provider if two_factor else None,
+            'providers_supported': ['totp', 'webauthn', 'sms', 'email'],
+            'note': 'MFA provider not configured. Set MFA_ENABLED=True and add a TOTP/WebAuthn provider to enable enrollment.',
+        })

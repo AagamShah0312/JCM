@@ -46,6 +46,22 @@ export default function CSVImportPage() {
     }
   };
 
+  const downloadErrors = async () => {
+    if (!file) return toast.error('Choose a CSV file first');
+    try {
+      const res = await csvApi.errorReport(type, role, file);
+      const url = window.URL.createObjectURL(new Blob([res.data as BlobPart]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `csv_import_errors_${type}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('Error report downloaded');
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    }
+  };
+
   return (
     <AppShell>
       <SectionTitle title="CSV Import" subtitle="Validate → preview → confirm → import (no unvalidated data is inserted)" />
@@ -88,7 +104,12 @@ export default function CSVImportPage() {
 
           {preview.errors?.length > 0 && (
             <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3">
-              <p className="mb-2 text-sm font-semibold text-red-700">Row-level validation errors</p>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-semibold text-red-700">Row-level validation errors</p>
+                <button className="btn-secondary text-xs" onClick={downloadErrors}>
+                  <FileSpreadsheet size={13} className="mr-1 inline" /> Download error report
+                </button>
+              </div>
               <ul className="max-h-40 space-y-1 overflow-y-auto text-xs text-red-600">
                 {preview.errors.slice(0, 50).map((e: any, i: number) => (
                   <li key={i}>Row {e.row} · {e.field}: {e.message}</li>

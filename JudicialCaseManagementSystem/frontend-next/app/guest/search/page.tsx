@@ -12,12 +12,20 @@ import { useAuth } from '@/lib/auth';
 export default function GuestSearchPage() {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
+  const [caseType, setCaseType] = useState('');
+  const [court, setCourt] = useState('');
+  const [status, setStatus] = useState('');
   const [submitted, setSubmitted] = useState('');
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['public-search', submitted],
-    queryFn: () => publicApi.search({ search: submitted || undefined }).then((r) => r.data),
-    enabled: submitted !== '',
+    queryKey: ['public-search', submitted, caseType, court, status],
+    queryFn: () => publicApi.search({
+      search: submitted || undefined,
+      case_type: caseType || undefined,
+      court: court || undefined,
+      status: status || undefined,
+    }).then((r) => r.data),
+    enabled: Boolean(submitted || caseType || court || status),
   });
 
   const runSearch = (e: React.FormEvent) => {
@@ -55,6 +63,35 @@ export default function GuestSearchPage() {
           </div>
           <button className="rounded-lg bg-white px-6 font-medium text-brand-700 shadow-lg hover:bg-slate-100">Search</button>
         </form>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <select
+            className="rounded-lg border-0 bg-white/95 px-3 py-2 text-sm text-slate-700 shadow outline-none"
+            value={caseType}
+            onChange={(e) => setCaseType(e.target.value)}
+          >
+            <option value="">All case types</option>
+            {['Civil', 'Criminal', 'Corporate', 'Family', 'Constitutional', 'Other'].map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+          <input
+            className="rounded-lg border-0 bg-white/95 px-3 py-2 text-sm text-slate-700 shadow outline-none"
+            placeholder="Court name…"
+            value={court}
+            onChange={(e) => setCourt(e.target.value)}
+          />
+          <select
+            className="rounded-lg border-0 bg-white/95 px-3 py-2 text-sm text-slate-700 shadow outline-none"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
+            <option value="">All statuses</option>
+            {['FILED', 'REGISTERED', 'PENDING', 'ACTIVE', 'ADJOURNED', 'RESERVED_FOR_ORDER', 'DISPOSED', 'CLOSED'].map((s) => (
+              <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+            ))}
+          </select>
+        </div>
 
         <div className="mt-8">
           {isLoading && <LoadingState label="Searching public records…" />}

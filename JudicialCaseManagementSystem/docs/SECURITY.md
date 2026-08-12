@@ -8,7 +8,12 @@ Security is treated as a core feature (spec §46).
   blacklisting (simplejwt `token_blacklist`).
 - Passwords hashed (Django PBKDF2/bcrypt); strength validated
   (uppercase, digit, special char).
-- MFA-ready architecture (hook points documented; no MFA provider bundled).
+- **MFA-ready architecture**: `TwoFactorAuth` model (per-user enable flag,
+  provider: TOTP/WebAuthn/SMS/Email, encrypted secret slot) + `MFA_ENABLED`
+  setting + `GET /api/auth/mfa/status/` endpoint. A concrete TOTP/WebAuthn
+  provider is intentionally not bundled — set `MFA_ENABLED=True` and add a
+  provider (e.g. django-otp/pyotp) to enable enrollment. The login flow can
+  then require a challenge after password verification.
 
 ## Authorization
 

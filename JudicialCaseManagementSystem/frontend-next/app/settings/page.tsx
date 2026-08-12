@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { User, Lock, Save } from 'lucide-react';
+import { User, Lock, Save, ShieldCheck } from 'lucide-react';
 import AppShell from '@/components/AppShell';
-import { Card, SectionTitle, RoleBadge } from '@/components/ui';
+import { Card, SectionTitle, RoleBadge, Badge } from '@/components/ui';
 import { authApi } from '@/lib/services';
 import { useAuth } from '@/lib/auth';
 import { getErrorMessage } from '@/lib/api';
@@ -15,6 +15,7 @@ export default function SettingsPage() {
   const { user, fetchProfile } = useAuth();
 
   const profileQ = useQuery({ queryKey: ['profile'], queryFn: () => authApi.profile().then((r) => r.data) });
+  const mfaQ = useQuery({ queryKey: ['mfa'], queryFn: () => authApi.mfaStatus().then((r) => r.data) });
   const me = profileQ.data || user;
 
   const [profile, setProfile] = useState({
@@ -67,6 +68,21 @@ export default function SettingsPage() {
           <button className="btn-primary mt-4" disabled={saveProfile.isPending} onClick={() => saveProfile.mutate(profile)}>
             <Save size={15} /> {saveProfile.isPending ? 'Saving…' : 'Save Profile'}
           </button>
+        </Card>
+
+        <Card>
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700"><ShieldCheck size={16} /> Two-Factor Authentication (MFA-ready)</h3>
+          {mfaQ.isLoading ? <p className="text-sm text-slate-400">Checking…</p> : mfaQ.data && (
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Badge tone={mfaQ.data.mfa_enabled ? 'green' : mfaQ.data.mfa_available ? 'amber' : 'slate'}>
+                  {mfaQ.data.mfa_enabled ? 'Enabled' : mfaQ.data.mfa_available ? 'Available' : 'Not available'}
+                </Badge>
+                {mfaQ.data.provider && <span className="text-xs text-slate-400">Provider: {mfaQ.data.provider}</span>}
+              </div>
+              <p className="text-xs text-slate-400">{mfaQ.data.note}</p>
+            </div>
+          )}
         </Card>
 
         <Card>
