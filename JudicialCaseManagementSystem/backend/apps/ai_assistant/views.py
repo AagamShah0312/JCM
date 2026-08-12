@@ -21,18 +21,16 @@ from .serializers import (
 )
 from .services import RAGService, DocumentProcessor
 from apps.cases.models import Case
+from apps.cases.permissions import can_view_case
 from django.db.models import Q
 from apps.documents.models import CaseDocument
+from apps.ai import services as ai_services
 
 logger = logging.getLogger(__name__)
 
 
 def _can_access_case_ai(user, case):
-    if user.role in ['admin', 'guest']:
-        return True
-    if user.role == 'judge':
-        return case.assigned_judge_id == user.id or case.created_by_id == user.id
-    return case.assigned_lawyer_id == user.id or case.assignments.filter(lawyer=user, is_active=True).exists()
+    return can_view_case(user, case)
 
 
 def _conversation_history(conversation, limit=10):
@@ -97,6 +95,24 @@ class CaseAssistantMixin:
             error_message=error_message,
         )
 
+    def _store_citations(self, message, citations):
+        """Persist structured citations against an assistant message."""
+        from .models import AICitation
+        if not citations:
+            return
+        for cit in citations:
+            AICitation.objects.create(
+                message=message,
+                source_type=cit.get('source_type', 'other'),
+                source_id=cit.get('source_id'),
+                source_label=cit.get('source_label', ''),
+                page_number=cit.get('page_number'),
+                chunk_index=cit.get('chunk_index'),
+                excerpt=cit.get('excerpt', ''),
+                url=cit.get('url', ''),
+                metadata=cit.get('metadata', {}),
+            )
+
 
 class CaseAIChatAPIView(CaseAssistantMixin, APIView):
     """Chat with AI about the currently selected case."""
@@ -133,26 +149,27 @@ class CaseAIChatAPIView(CaseAssistantMixin, APIView):
             content=user_message_text,
         )
 
-        rag_service = RAGService()
+        # Structured, permission-filtered answer with citations (apps.ai)
         start_time = time.time()
-        ai_response = rag_service.query_case(str(case.id), user_message_text, history=history)
+        structured = ai_services.answer_case_question(request.user, case, user_message_text, history=history)
         processing_time = time.time() - start_time
 
-        if ai_response.get('success'):
+        if structured.get('success'):
             assistant_message = AIMessage.objects.create(
                 conversation=conversation,
                 role='assistant',
-                content=ai_response.get('response', ''),
-                tokens_used=ai_response.get('tokens_used', 0),
-                sources=ai_response.get('sources', []),
+                content=structured.get('answer', ''),
+                tokens_used=0,
+                sources=structured.get('sources', []),
             )
+            self._store_citations(assistant_message, structured.get('citations', []))
             self.log_query(
                 user=request.user,
                 case=case,
                 query_type='qa',
                 query_text=user_message_text,
-                response=ai_response.get('response', ''),
-                tokens_used=ai_response.get('tokens_used', 0),
+                response=structured.get('answer', ''),
+                tokens_used=0,
                 processing_time=processing_time,
                 success=True,
             )
@@ -160,7 +177,7 @@ class CaseAIChatAPIView(CaseAssistantMixin, APIView):
             assistant_message = AIMessage.objects.create(
                 conversation=conversation,
                 role='assistant',
-                content=f"Error: {ai_response.get('error', 'Unknown error')}",
+                content=structured.get('answer') or f"Error: {structured.get('error', 'Unknown error')}",
             )
             self.log_query(
                 user=request.user,
@@ -171,7 +188,7 @@ class CaseAIChatAPIView(CaseAssistantMixin, APIView):
                 tokens_used=0,
                 processing_time=processing_time,
                 success=False,
-                error_message=ai_response.get('error', ''),
+                error_message=structured.get('error', ''),
             )
 
         conversation.save(update_fields=['updated_at'])
@@ -185,7 +202,9 @@ class CaseAIChatAPIView(CaseAssistantMixin, APIView):
             'user_message': AIMessageSerializer(user_message).data,
             'assistant_message': AIMessageSerializer(assistant_message).data,
             'messages': self.serialize_messages(conversation),
-            'sources': ai_response.get('sources', []),
+            'sources': structured.get('sources', []),
+            'citations': structured.get('citations', []),
+            'warnings': structured.get('warnings', []),
         }, status=status.HTTP_201_CREATED)
 
 
@@ -207,12 +226,10 @@ class CaseAIExplainAPIView(CaseAssistantMixin, APIView):
         if cached:
             return Response({**cached, 'cached': True})
 
-        rag_service = RAGService()
         start_time = time.time()
-        result = rag_service.explain_case(str(case.id))
+        structured = ai_services.summarize_case(request.user, case, summary_type='case')
         processing_time = time.time() - start_time
-
-        if result.get('success'):
+        if structured.get('success'):
             payload = {
                 'case': {
                     'id': str(case.id),
@@ -220,8 +237,10 @@ class CaseAIExplainAPIView(CaseAssistantMixin, APIView):
                     'title': case.title,
                     'status': case.status,
                 },
-                'explanation': result.get('explanation', ''),
-                'sources': result.get('sources', []),
+                'explanation': structured.get('summary', ''),
+                'sources': structured.get('citations', []),
+                'citations': structured.get('citations', []),
+                'warnings': structured.get('warnings', []),
                 'generated_at': timezone.now().isoformat(),
                 'processing_time': processing_time,
                 'cached': False,
@@ -232,15 +251,15 @@ class CaseAIExplainAPIView(CaseAssistantMixin, APIView):
                 case=case,
                 query_type='explain',
                 query_text='Explain this case',
-                response=result.get('explanation', ''),
-                tokens_used=result.get('tokens_used', 0),
+                response=structured.get('summary', ''),
+                tokens_used=0,
                 processing_time=processing_time,
                 success=True,
             )
             return Response(payload)
 
         return Response({
-            'error': result.get('error', 'Failed to generate explanation'),
+            'error': structured.get('error', 'Failed to generate explanation'),
         }, status=status.HTTP_400_BAD_REQUEST)
 
 

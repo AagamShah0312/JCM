@@ -7,6 +7,7 @@ import uuid
 
 from django.db import models
 from django.core.validators import FileExtensionValidator
+from pgvector.django import VectorField
 
 
 class DocumentProcessingState:
@@ -223,8 +224,13 @@ class DocumentChunk(models.Model):
     chunk_index = models.PositiveIntegerField()
     page_number = models.PositiveIntegerField(null=True, blank=True)
     text = models.TextField()
-    # pgvector embedding column added via migration (VectorField from pgvector.django)
-    embedding = models.BinaryField(blank=True, null=True, help_text='Serialized pgvector embedding')
+    # pgvector embedding (VectorField from pgvector.django). The `vector`
+    # extension + column are created in a dedicated migration so that the
+    # extension exists before this field is added.
+    embedding = VectorField(
+        dimensions=768, blank=True, null=True,
+        help_text='pgvector embedding (768-dim)',
+    )
     embedding_model = models.CharField(max_length=200, blank=True)
     document_version = models.PositiveIntegerField(default=1)
     visibility = models.CharField(
