@@ -29,8 +29,10 @@ def is_mfa_available() -> bool:
 
 
 def is_mfa_enabled(user) -> bool:
-    tf = getattr(user, 'two_factor', None)
-    return bool(tf and tf.is_enabled)
+    # Query directly (not via the cached reverse one-to-one descriptor) so a
+    # stale cache from before enrollment never hides an enabled flag.
+    from .models import TwoFactorAuth
+    return TwoFactorAuth.objects.filter(user=user, is_enabled=True).exists()
 
 
 def generate_secret() -> str:
@@ -117,3 +119,62 @@ def decrypt_secret(encrypted: str) -> str:
         return _fernet().decrypt(encrypted.encode('ascii')).decode('utf-8')
     except Exception:
         return ''
+
+
+# ---------------------------------------------------------------------------
+# Recovery codes (spec §46): one-time backup codes for when the authenticator
+# app is unavailable. Stored hashed; plaintext shown once at issuance.
+# ---------------------------------------------------------------------------
+
+import hashlib
+import secrets as _secrets
+
+RECOVERY_CODE_COUNT = 10
+RECOVERY_CODE_LENGTH = 10  # e.g. xxxx-xxxxxx
+
+
+def _hash_code(code: str) -> str:
+    return hashlib.sha256(code.encode('utf-8')).hexdigest()
+
+
+def generate_recovery_codes(user, count: int = RECOVERY_CODE_COUNT) -> list:
+    """Create fresh recovery codes for a user's 2FA; returns plaintext codes."""
+    from .models import TwoFactorAuth, TwoFactorRecoveryCode
+    tf = get_or_create_two_factor(user)
+    # Invalidate any previous unused codes
+    TwoFactorRecoveryCode.objects.filter(two_factor=tf, used_at__isnull=True).delete()
+    plain = []
+    for _ in range(count):
+        code = f"{_secrets.token_hex(4)}-{_secrets.token_hex(3)}"[:RECOVERY_CODE_LENGTH]
+        # ensure a usable format: XXXX-XXXXXX
+        code = f"{_secrets.token_hex(2).upper()}-{_secrets.token_hex(3).upper()}"
+        TwoFactorRecoveryCode.objects.create(two_factor=tf, code_hash=_hash_code(code))
+        plain.append(code)
+    return plain
+
+
+def list_recovery_codes(user) -> list:
+    from .models import TwoFactorRecoveryCode
+    tf = get_or_create_two_factor(user)
+    return [
+        {'id': str(c.id), 'created_at': c.created_at.isoformat() if c.created_at else None, 'used': bool(c.used_at)}
+        for c in TwoFactorRecoveryCode.objects.filter(two_factor=tf).order_by('created_at')
+    ]
+
+
+def consume_recovery_code(user, code: str) -> bool:
+    """
+    Validate + consume a recovery code for the login challenge.
+    Returns True if the code was valid and marked used.
+    """
+    from django.utils import timezone as _tz
+    from .models import TwoFactorRecoveryCode
+    tf = get_or_create_two_factor(user)
+    code = (code or '').strip().upper().replace(' ', '')
+    h = _hash_code(code)
+    candidate = TwoFactorRecoveryCode.objects.filter(two_factor=tf, code_hash=h, used_at__isnull=True).first()
+    if not candidate:
+        return False
+    candidate.used_at = _tz.now()
+    candidate.save(update_fields=['used_at'])
+    return True

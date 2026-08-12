@@ -10,17 +10,26 @@ import { formatDate } from '@/lib/utils';
 
 export default function CauseListPage() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [courtroom, setCourtroom] = useState('');
   const { data, isLoading, error } = useQuery({
-    queryKey: ['cause-list', date],
-    queryFn: () => analyticsApi.causeList(date).then((r) => r.data),
+    queryKey: ['cause-list', date, courtroom],
+    queryFn: () => analyticsApi.causeList(date, courtroom || undefined).then((r) => r.data),
   });
 
   return (
     <AppShell>
-      <SectionTitle title="Cause List" subtitle="Today's court schedule" />
+      <SectionTitle title="Cause List" subtitle="Court schedule — filter by date or courtroom (spec §26)" />
       <Card className="mb-4">
-        <label className="label">Date</label>
-        <input type="date" className="input sm:w-52" value={date} onChange={(e) => setDate(e.target.value)} />
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="label" htmlFor="cl-date">Date</label>
+            <input id="cl-date" type="date" className="input sm:w-52" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="label" htmlFor="cl-courtroom">Courtroom</label>
+            <input id="cl-courtroom" className="input sm:w-56" placeholder="e.g. Courtroom 1" value={courtroom} onChange={(e) => setCourtroom(e.target.value)} />
+          </div>
+        </div>
       </Card>
       {isLoading && <LoadingState />}
       {error && <ErrorState message="Could not load cause list" />}

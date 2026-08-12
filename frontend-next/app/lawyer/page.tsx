@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { FolderOpen, CalendarDays, FileText, BellRing, Sparkles } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 import { StatCard, Card, SectionTitle, LoadingState, ErrorState, StatusBadge } from '@/components/ui';
-import { casesApi, hearingsApi, notificationsApi, analyticsApi } from '@/lib/services';
+import { casesApi, hearingsApi, notificationsApi, analyticsApi, unwrapList } from '@/lib/services';
 import { formatDate, timeAgo } from '@/lib/utils';
 
 export default function LawyerDashboard() {
@@ -16,7 +16,7 @@ export default function LawyerDashboard() {
   if (cases.isLoading) return <AppShell><LoadingState /></AppShell>;
   if (cases.error) return <AppShell><ErrorState message="Could not load dashboard" /></AppShell>;
 
-  const myCases = cases.data || [];
+  const myCases = unwrapList(cases.data);
   const today = new Date().toISOString().slice(0, 10);
   const todays = (hearings.data || []).filter((h) => h.date === today);
   const upcoming = (hearings.data || []).filter((h) => h.date > today && h.status === 'SCHEDULED');

@@ -267,11 +267,18 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
-CELERY_BEAT_SCHEDULE = {}
 # Run tasks synchronously when no worker is present (dev convenience).
 # Set CELERY_TASK_ALWAYS_EAGER=False in production with a real worker.
 CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=True, cast=bool)
 CELERY_TASK_EAGER_PROPAGATES = True
+
+# Celery Beat schedule
+CELERY_BEAT_SCHEDULE = {
+    'process-scheduled-notifications': {
+        'task': 'apps.notifications.tasks.process_scheduled_notifications',
+        'schedule': 60 * 15,  # every 15 minutes
+    },
+}
 
 # Object storage abstraction
 # storage backend: 'local' (default) or 's3'

@@ -2,10 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { CalendarDays, Clock, AlertCircle, FileText, Scale } from 'lucide-react';
+import { CalendarDays, Clock, AlertCircle, FileText, Scale, ScrollText } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 import { StatCard, Card, SectionTitle, LoadingState, ErrorState, StatusBadge } from '@/components/ui';
-import { hearingsApi, casesApi, analyticsApi } from '@/lib/services';
+import { hearingsApi, casesApi, analyticsApi, ordersApi, unwrapList } from '@/lib/services';
 import { formatDate } from '@/lib/utils';
 
 export default function JudgeDashboard() {
@@ -14,6 +14,7 @@ export default function JudgeDashboard() {
   const hearings = useQuery({ queryKey: ['judge-hearings'], queryFn: () => hearingsApi.list({}).then((r) => r.data) });
   const cases = useQuery({ queryKey: ['judge-cases'], queryFn: () => casesApi.list().then((r) => r.data) });
   const causeList = useQuery({ queryKey: ['cause-list', today], queryFn: () => analyticsApi.causeList(today).then((r) => r.data) });
+  const orders = useQuery({ queryKey: ['judge-orders'], queryFn: () => ordersApi.list().then((r) => r.data) });
 
   if (hearings.isLoading || cases.isLoading) return <AppShell><LoadingState /></AppShell>;
   if (hearings.error) return <AppShell><ErrorState message="Could not load dashboard" /></AppShell>;
@@ -21,9 +22,10 @@ export default function JudgeDashboard() {
   const allHearings = hearings.data || [];
   const todays = allHearings.filter((h) => h.date === today);
   const upcoming = allHearings.filter((h) => h.date > today && h.status === 'SCHEDULED');
-  const allCases = cases.data || [];
+  const allCases = unwrapList(cases.data);
   const pending = allCases.filter((c) => ['PENDING', 'FILED', 'REGISTERED'].includes(c.status));
   const urgent = allCases.filter((c) => c.priority === 'URGENT');
+  const ordersPending = (orders.data || []).filter((o) => o.status === 'DRAFT').length;
 
   return (
     <AppShell>
@@ -34,6 +36,9 @@ export default function JudgeDashboard() {
         <StatCard label="Upcoming Hearings" value={upcoming.length} icon={<Clock size={22} />} />
         <StatCard label="Pending Cases" value={pending.length} icon={<Scale size={22} />} />
         <StatCard label="Urgent Cases" value={urgent.length} icon={<AlertCircle size={22} />} />
+      </div>
+      <div className="mt-4">
+        <StatCard label="Orders Pending (draft)" value={ordersPending} icon={<ScrollText size={22} />} />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">

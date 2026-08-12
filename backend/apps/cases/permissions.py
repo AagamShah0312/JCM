@@ -133,7 +133,7 @@ def can_download_document(user, document) -> bool:
 
 def document_queryset_for(user):
     """Base queryset of documents the user is authorized to see."""
-    from .models import CaseDocument
+    from apps.documents.models import CaseDocument
     if not user or not user.is_authenticated:
         return CaseDocument.objects.filter(visibility='PUBLIC', state='ACTIVE')
     if user.role == 'admin':

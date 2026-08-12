@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Scale, FolderOpen, FileText, CalendarDays, Bell,
-  Settings, LogOut, Menu, X, Gavel, Users, BarChart3, Search, Upload,
+  Settings, LogOut, Menu, X, Gavel, Users, BarChart3, Search, Upload, Globe,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { NavLink } from './ui';
@@ -31,6 +31,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const navItems: { href: string; label: string; icon: React.ReactNode; roles: string[] }[] = [
     { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, roles: ['admin', 'judge', 'lawyer'] },
+    { href: '/search', label: 'Search', icon: <Search size={18} />, roles: ['admin', 'judge', 'lawyer'] },
     { href: '/cases', label: 'Cases', icon: <FolderOpen size={18} />, roles: ['admin', 'judge', 'lawyer'] },
     { href: '/cause-list', label: 'Cause List', icon: <CalendarDays size={18} />, roles: ['admin', 'judge', 'lawyer'] },
     { href: '/calendar', label: 'Calendar', icon: <CalendarDays size={18} />, roles: ['admin', 'judge', 'lawyer'] },

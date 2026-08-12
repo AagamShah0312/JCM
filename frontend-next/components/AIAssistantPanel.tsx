@@ -42,6 +42,23 @@ export default function AIAssistantPanel({ caseId }: { caseId: string }) {
     },
   });
 
+  const docsSummaryMutation = useMutation({
+    mutationFn: () => aiApi.documentsSummary(caseId),
+    onSuccess: (res) => {
+      const data = res.data as AIResponse;
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: data.summary || 'No document summary available',
+        citations: data.citations || [],
+        warnings: data.warnings || [],
+      }]);
+    },
+  });
+
+  const pushAssistant = (content: string, citations: Citation[] = [], warnings: string[] = []) => {
+    setMessages((prev) => [...prev, { role: 'assistant', content, citations, warnings }]);
+  };
+
   const send = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -67,6 +84,9 @@ export default function AIAssistantPanel({ caseId }: { caseId: string }) {
         </div>
         <button className="btn-secondary ml-auto" onClick={() => explainMutation.mutate()} disabled={explainMutation.isPending}>
           {explainMutation.isPending ? '…' : 'Explain case'}
+        </button>
+        <button className="btn-secondary" onClick={() => docsSummaryMutation.mutate()} disabled={docsSummaryMutation.isPending}>
+          <FileText size={14} /> {docsSummaryMutation.isPending ? '…' : 'Docs summary'}
         </button>
       </header>
 

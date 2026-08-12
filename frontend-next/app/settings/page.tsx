@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { User, Lock, Save, ShieldCheck, QrCode, Trash2 } from 'lucide-react';
+import { User, Lock, Save, ShieldCheck, QrCode, Trash2, KeyRound, RefreshCw, Fingerprint } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 import { Card, SectionTitle, RoleBadge, Badge } from '@/components/ui';
 import { authApi } from '@/lib/services';
@@ -101,11 +101,14 @@ export default function SettingsPage() {
 function MfaCard() {
   const qc = useQueryClient();
   const mfaQ = useQuery({ queryKey: ['mfa'], queryFn: () => authApi.mfaStatus().then((r) => r.data) });
+  const recoveryQ = useQuery({ queryKey: ['mfa-recovery'], queryFn: () => authApi.mfaRecoveryCodes().then((r) => r.data), enabled: false });
+  const webauthnQ = useQuery({ queryKey: ['mfa-webauthn'], queryFn: () => authApi.mfaWebAuthn().then((r) => r.data), enabled: false });
   const [enrollData, setEnrollData] = useState<any>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ['mfa'] });
+  const refresh = () => { qc.invalidateQueries({ queryKey: ['mfa'] }); setRecoveryCodes(null); };
 
   const enroll = async () => {
     setBusy(true);
@@ -123,11 +126,39 @@ function MfaCard() {
   const verify = async () => {
     setBusy(true);
     try {
-      await authApi.mfaVerify(code);
+      const r = await authApi.mfaVerify(code);
       toast.success('Two-factor authentication enabled');
+      if (r.data?.recovery_codes?.length) {
+        setRecoveryCodes(r.data.recovery_codes);
+      }
       setEnrollData(null);
       setCode('');
       refresh();
+    } catch (e: any) {
+      toast.error(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const showRecovery = async () => {
+    try {
+      const r = await authApi.mfaRecoveryCodes();
+      const used = (r.data?.recovery_codes || []).filter((c: any) => c.used).length;
+      toast(`${used} of ${(r.data?.recovery_codes || []).length} recovery code(s) used`, { icon: '🔑' });
+      recoveryQ.refetch();
+    } catch (e: any) {
+      toast.error(getErrorMessage(e));
+    }
+  };
+
+  const regenerateRecovery = async () => {
+    if (!window.confirm('Regenerate recovery codes? Previous unused codes will stop working.')) return;
+    setBusy(true);
+    try {
+      const r = await authApi.mfaRegenerateRecovery();
+      setRecoveryCodes(r.data?.recovery_codes || []);
+      toast.success('New recovery codes generated — save them');
     } catch (e: any) {
       toast.error(getErrorMessage(e));
     } finally {
@@ -207,9 +238,34 @@ function MfaCard() {
       )}
 
       {enabled && (
-        <button className="btn-danger" disabled={busy} onClick={disable}>
-          <Trash2 size={15} /> Disable two-factor authentication
-        </button>
+        <div className="space-y-3">
+          {recoveryCodes && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-amber-700">Recovery codes — save these somewhere safe (shown once)</p>
+              <div className="grid grid-cols-2 gap-1 font-mono text-sm text-slate-800">
+                {recoveryCodes.map((c, i) => <code key={i}>{c}</code>)}
+              </div>
+              <button className="btn-secondary mt-2 text-xs" onClick={() => setRecoveryCodes(null)}>Hide</button>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-secondary" disabled={busy} onClick={showRecovery}>
+              <KeyRound size={14} /> Recovery codes
+            </button>
+            <button className="btn-secondary" disabled={busy} onClick={regenerateRecovery}>
+              <RefreshCw size={14} /> Regenerate
+            </button>
+            <button className="btn-danger" disabled={busy} onClick={disable}>
+              <Trash2 size={15} /> Disable
+            </button>
+          </div>
+          <button className="btn-secondary text-xs" onClick={() => webauthnQ.refetch()}>
+            <Fingerprint size={14} /> WebAuthn / Passkeys
+          </button>
+          {webauthnQ.data && (
+            <p className="text-xs text-slate-400">{webauthnQ.data.note} ({webauthnQ.data.registered_credentials?.length || 0} credential(s))</p>
+          )}
+        </div>
       )}
     </Card>
   );

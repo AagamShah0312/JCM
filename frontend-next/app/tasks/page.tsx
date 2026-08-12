@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import { Card, SectionTitle, LoadingState, ErrorState, StatusBadge, EmptyState } from '@/components/ui';
-import { tasksApi, casesApi } from '@/lib/services';
+import { tasksApi, casesApi, unwrapList } from '@/lib/services';
 import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
@@ -36,7 +36,7 @@ export default function TasksPage() {
             <div><label className="label">Case</label>
               <select className="input" value={form.case} onChange={(e) => setForm({ ...form, case: e.target.value })}>
                 <option value="">— none —</option>
-                {(cases.data || []).map((c) => <option key={c.id} value={c.id}>{c.case_number}</option>)}
+                {unwrapList(cases.data).map((c) => <option key={c.id} value={c.id}>{c.case_number}</option>)}
               </select>
             </div>
             <div><label className="label">Due date</label><input type="date" className="input" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></div>

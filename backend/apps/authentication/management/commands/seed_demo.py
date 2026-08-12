@@ -200,32 +200,80 @@ class Command(BaseCommand):
                                          title=f'Order published: {order.title}',
                                          event_date=today - timedelta(days=30), created_by=case.assigned_judge)
 
-        # --- Documents (fictional, plain-text; pipeline will process) ---
-        doc_specs = [
+
+        # --- Documents: mix of plain-text and realistic multi-page PDFs.
+        # PDFs are generated with PyMuPDF so the document pipeline has real
+        # page-level text to extract, chunk and index for the AI (spec §6/§37).
+        def make_pdf(file_name, pages_text):
+            import pymupdf
+            doc = pymupdf.open()
+            for i, txt in enumerate(pages_text, start=1):
+                page = doc.new_page()
+                page.insert_text((72, 72), txt, fontsize=10)
+            data = doc.tobytes()
+            doc.close()
+            return SimpleUploadedFile(file_name, data, content_type='application/pdf')
+
+        txt_docs = [
             ('CIV/2024/118', 'petition.txt', 'Petition', 'This is the original petition filed by Rajesh Sharma claiming INR 4,50,000 for unpaid goods supplied to Agarwal Traders.', 'LAWYER_ONLY'),
-            ('CIV/2024/118', 'affidavit.txt', 'Affidavit', 'Affidavit of Rajesh Sharma sworn on the date of filing, attesting to the supply of goods and outstanding invoices.', 'LAWYER_ONLY'),
             ('CIV/2024/118', 'public-notice.txt', 'Annexure', 'Public notice regarding the pending civil dispute, published in the local gazette.', 'PUBLIC'),
-            ('CRL/2024/032', 'evidence.txt', 'Evidence', 'Evidence recorded during the criminal matter including witness statements and forensic report summary.', 'JUDGE_ONLY'),
             ('FAM/2023/245', 'settlement-notes.txt', 'Other', 'Confidential settlement discussion notes between the parties.', 'LAWYER_ONLY'),
-            ('CIV/2023/401', 'judgment-reserved.txt', 'Judgment', 'Matter reserved for judgment; written submissions received from both counsels.', 'LAWYER_ONLY'),
         ]
-        for case_no, fname, dtype, content, vis in doc_specs:
+        pdf_docs = [
+            ('CIV/2024/118', 'petition-sharma.pdf', 'Petition',
+             ['IN THE COURT OF THE CIVIL JUDGE, AHMEDABAD',
+              'Petition No. CIV/2024/118 — Rajesh Sharma v. Agarwal Traders Pvt Ltd',
+              'The petitioner supplied goods worth INR 4,50,000 between January and March 2024. Invoices 101-105 were raised.',
+              'Despite repeated demands, the respondent has failed to make payment. The petitioner seeks recovery with interest.'],
+             'LAWYER_ONLY'),
+            ('CIV/2024/118', 'affidavit-sharma.pdf', 'Affidavit',
+             ['AFFIDAVIT OF RAJESH SHARMA',
+              'I, Rajesh Sharma, son of H. Sharma, aged 52 years, do hereby solemnly affirm and declare:',
+              '1. That I supplied the goods described in the invoices annexed hereto. 2. That the respondent acknowledged receipt.',
+              '3. That the amount of INR 4,50,000 remains unpaid as on the date of this affidavit.'],
+             'LAWYER_ONLY'),
+            ('CRL/2024/032', 'evidence-record.pdf', 'Evidence',
+             ['EVIDENCE RECORD — STATE v. VERMA',
+              'Witness examination conducted on the last date of hearing. The prosecution examined PW-1 (complainant).',
+              'PW-1 deposed regarding the sequence of events and identified the accused in court.',
+              'Defence cross-examined PW-1 at length; no material contradictions were elicited.'],
+             'JUDGE_ONLY'),
+            ('CIV/2023/401', 'order-reserving-judgment.pdf', 'Judgment',
+             ['ORDER — CIV/2023/401 Patel v. Ahmedabad Municipal Corporation',
+              'Arguments concluded. Both counsels filed written submissions.',
+              'This court reserves judgment in the matter. Parties to pay costs of the day.',
+              'Judgment to be pronounced on the next date notified.'],
+             'LAWYER_ONLY'),
+        ]
+        doc_specs = []
+        for case_no, fname, dtype, content, vis in txt_docs:
+            doc_specs.append((case_no, fname, dtype, content, vis, None))
+        for case_no, fname, dtype, pages, vis in pdf_docs:
+            doc_specs.append((case_no, fname, dtype, None, vis, pages))
+
+        for case_no, fname, dtype, content, vis, pdf_pages in doc_specs:
             case = next((c for c in cases if c.case_number == case_no), None)
             if not case:
                 continue
             if CaseDocument.objects.filter(file_name=fname, case=case).exists():
                 continue
+            if pdf_pages:
+                upload_file = make_pdf(fname, pdf_pages)
+                content = '\n'.join(pdf_pages)
+            else:
+                upload_file = SimpleUploadedFile(fname, content.encode(), content_type='text/plain')
             doc = CaseDocument.objects.create(
                 case=case, document_type=dtype.lower(), file_name=fname,
-                file=SimpleUploadedFile(fname, content.encode(), content_type='text/plain'),
-                file_size=len(content), mime_type='text/plain',
+                file=upload_file,
+                file_size=len(content), mime_type='application/pdf' if pdf_pages else 'text/plain',
                 uploaded_by=case.assigned_judge, description=f'Demo {dtype.lower()} document',
                 visibility=vis,
             )
-            # Run pipeline eagerly to create extraction + chunks
             from apps.documents.tasks import process_document_task
             process_document_task.run(str(doc.id))
+            doc.refresh_from_db()
             self.stdout.write(f'  document {fname} processed ({doc.processing_state})')
+
 
         # --- Tasks ---
         for case in cases[:3]:

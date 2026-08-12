@@ -492,11 +492,18 @@ class TwoFactorVerifyView(generics.GenericAPIView):
         tf.is_enabled = True
         tf.verified_at = timezone.now()
         tf.save()
+        # Issue one-time recovery codes (plaintext shown only once — save them!)
+        from .mfa import generate_recovery_codes
+        recovery_codes = generate_recovery_codes(user)
         from apps.audit.services import record_audit
         record_audit(user=user, action='PERMISSION_CHANGED', model_name='TwoFactorAuth',
                      object_id=tf.id, changes={'action': 'mfa_enabled'},
                      ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'))
-        return Response({'mfa_enabled': True, 'message': 'Two-factor authentication enabled'})
+        return Response({
+            'mfa_enabled': True,
+            'message': 'Two-factor authentication enabled. Save your recovery codes now (shown once).',
+            'recovery_codes': recovery_codes,
+        })
 
 
 class TwoFactorDisableView(generics.GenericAPIView):
@@ -532,7 +539,7 @@ class TwoFactorChallengeView(generics.GenericAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        from .mfa import verify_code, resolve_mfa_challenge, is_mfa_enabled, decrypt_secret
+        from .mfa import verify_code, resolve_mfa_challenge, is_mfa_enabled, decrypt_secret, consume_recovery_code
         token = request.data.get('mfa_token', '')
         code = request.data.get('code', '')
         user = resolve_mfa_challenge(token)
@@ -542,7 +549,9 @@ class TwoFactorChallengeView(generics.GenericAPIView):
         if not tf or not is_mfa_enabled(user):
             return Response({'error': '2FA is not enabled for this account'}, status=status.HTTP_400_BAD_REQUEST)
         secret = decrypt_secret(tf.secret_encrypted)
-        if not secret or not verify_code(secret, code):
+        totp_ok = bool(secret) and verify_code(secret, code)
+        recovery_ok = (not totp_ok) and consume_recovery_code(user, code)
+        if not totp_ok and not recovery_ok:
             return Response({'error': 'Invalid code'}, status=status.HTTP_400_BAD_REQUEST)
         refresh = RefreshToken.for_user(user)
         return Response({
@@ -550,3 +559,61 @@ class TwoFactorChallengeView(generics.GenericAPIView):
             'refresh': str(refresh),
             'access': str(refresh.access_token),
         }, status=status.HTTP_200_OK)
+
+
+class TwoFactorRecoveryCodesView(generics.GenericAPIView):
+    """List remaining recovery codes (masked) for the current user (spec §46)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .mfa import is_mfa_enabled, list_recovery_codes
+        if not is_mfa_enabled(request.user):
+            return Response({'error': '2FA is not enabled'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'recovery_codes': list_recovery_codes(request.user)})
+
+
+class TwoFactorRecoveryRegenerateView(generics.GenericAPIView):
+    """Regenerate recovery codes (invalidates previous unused ones)."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .mfa import is_mfa_enabled, generate_recovery_codes
+        if not is_mfa_enabled(request.user):
+            return Response({'error': '2FA is not enabled'}, status=status.HTTP_400_BAD_REQUEST)
+        codes = generate_recovery_codes(request.user)
+        from apps.audit.services import record_audit
+        record_audit(user=request.user, action='PERMISSION_CHANGED', model_name='TwoFactorAuth',
+                     object_id='', changes={'action': 'recovery_codes_regenerated'},
+                     ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'))
+        return Response({'recovery_codes': codes, 'message': 'Old codes invalidated. Save these new ones.'})
+
+
+class TwoFactorWebAuthnView(generics.GenericAPIView):
+    """
+    WebAuthn/passkey provider interface (spec §46).
+    The data model (TwoFactorWebAuthnCredential) is ready; wiring the full
+    attestation flow requires a WebAuthn server (py_webauthn) + browser
+    navigator.credentials. This endpoint reports status gracefully so the
+    UI never breaks.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .mfa import get_or_create_two_factor
+        tf = get_or_create_two_factor(request.user)
+        creds = tf.webauthn_credentials.all()
+        return Response({
+            'provider_available': False,
+            'note': 'WebAuthn provider not wired. Add py_webauthn + browser integration to enable passkeys.',
+            'registered_credentials': [
+                {'id': str(c.id), 'label': c.label, 'sign_count': c.sign_count,
+                 'created_at': c.created_at.isoformat() if c.created_at else None}
+                for c in creds
+            ],
+        })
+
+    def post(self, request):
+        return Response({
+            'provider_available': False,
+            'note': 'WebAuthn provider not wired. Add py_webauthn + browser integration to enable passkeys.',
+        }, status=status.HTTP_400_BAD_REQUEST)

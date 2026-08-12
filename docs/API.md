@@ -129,3 +129,31 @@ All errors use a consistent envelope:
 | GET | `/public/cases/{id}/orders/` | Public published orders |
 | GET | `/public/cases/{id}/documents/` | Public documents |
 | GET | `/public/cases/{id}/next-hearing/` | Next public hearing |
+
+## Global search (§30)
+
+| Method | Endpoint | Notes |
+|---|---|---|
+| GET | `/api/search/?q=…` (also `/api/v1/search/`) | Search cases/documents/hearings/orders; authorization-filtered; guests see public only |
+
+## AI summaries (§32)
+
+| Method | Endpoint |
+|---|---|
+| GET | `/api/ai/cases/{case_id}/hearing/{hearing_id}/summary/` |
+| GET | `/api/ai/cases/{case_id}/documents/summary/` |
+
+## MFA (TOTP) (§46)
+
+| Method | Endpoint |
+|---|---|
+| POST | `/api/auth/mfa/enroll/` → `{secret, otpauth_url, qr_png}` |
+| POST | `/api/auth/mfa/verify/` `{code}` — enables 2FA |
+| POST | `/api/auth/mfa/disable/` `{code}` |
+| POST | `/api/auth/mfa/challenge/` `{mfa_token, code}` — completes login |
+
+Login returns `{mfa_required, mfa_token, user}` when 2FA is enabled.
+
+## Versioned API (§48)
+
+All endpoints are available under both `/api/…` and `/api/v1/…`.

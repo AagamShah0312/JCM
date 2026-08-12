@@ -204,7 +204,8 @@ def cause_list_for_user(user, date=None, courtroom_id=None):
     # admin: all
 
     if courtroom_id:
-        qs = qs.filter(courtroom_id=courtroom_id)
+        # Accept either a courtroom UUID or a courtroom name (spec §26 filtering).
+        qs = qs.filter(Q(courtroom_id=courtroom_id) | Q(courtroom__name__icontains=courtroom_id))
 
     return qs.order_by('start_time', 'courtroom__name')
 

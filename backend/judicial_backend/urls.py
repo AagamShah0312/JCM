@@ -7,21 +7,28 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenRefreshView
 
+api_patterns = [
+    path('auth/', include('apps.authentication.urls')),
+    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('cases/', include('apps.cases.urls')),
+    path('courts/', include('apps.courts.urls')),
+    path('hearings/', include('apps.hearings.urls')),
+    path('orders/', include('apps.orders.urls')),
+    path('documents/', include('apps.documents.urls')),
+    path('tasks/', include('apps.tasks.urls')),
+    path('notifications/', include('apps.notifications.urls')),
+    path('ai/', include('apps.ai_assistant.urls')),
+    path('audit/', include('apps.audit.urls')),
+    path('analytics/', include('apps.analytics.urls')),
+    path('public/', include('apps.cases.public_urls')),
+    path('search/', include('apps.cases.search_urls')),
+]
+
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/auth/', include('apps.authentication.urls')),
-    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/cases/', include('apps.cases.urls')),
-    path('api/courts/', include('apps.courts.urls')),
-    path('api/hearings/', include('apps.hearings.urls')),
-    path('api/orders/', include('apps.orders.urls')),
-    path('api/documents/', include('apps.documents.urls')),
-    path('api/tasks/', include('apps.tasks.urls')),
-    path('api/notifications/', include('apps.notifications.urls')),
-    path('api/ai/', include('apps.ai_assistant.urls')),
-    path('api/audit/', include('apps.audit.urls')),
-    path('api/analytics/', include('apps.analytics.urls')),
-    path('api/public/', include('apps.cases.public_urls')),
+    path('api/', include(api_patterns)),
+    # Versioned alias (spec §48: clean REST APIs with versioning)
+    path('api/v1/', include(api_patterns)),
 ]
 
 # Serve media files in development

@@ -319,14 +319,12 @@ class AIConversationViewSet(viewsets.ModelViewSet):
                 content=user_message_text
             )
             
-            # Generate AI response using the case-aware prompt builder
-            rag_service = RAGService()
+            # Generate AI response using the structured, permission-filtered
+            # service (apps.ai) with citations.
+            from apps.ai import services as ai_services
             start_time = time.time()
-            
-            ai_response = rag_service.query_case(
-                str(conversation.case.id),
-                user_message_text,
-                history=history,
+            ai_response = ai_services.answer_case_question(
+                request.user, conversation.case, user_message_text, history=history,
             )
             processing_time = time.time() - start_time
             
@@ -335,10 +333,11 @@ class AIConversationViewSet(viewsets.ModelViewSet):
                 assistant_message = AIMessage.objects.create(
                     conversation=conversation,
                     role='assistant',
-                    content=ai_response.get('response', ''),
-                    tokens_used=ai_response.get('tokens_used', 0),
+                    content=ai_response.get('answer', ''),
+                    tokens_used=0,
                     sources=ai_response.get('sources', [])
                 )
+                self._store_citations(assistant_message, ai_response.get('citations', []))
                 
                 # Log query
                 AIQuery.objects.create(
@@ -346,8 +345,8 @@ class AIConversationViewSet(viewsets.ModelViewSet):
                     case=conversation.case,
                     query_type='qa',
                     query_text=user_message_text,
-                    response=ai_response.get('response', ''),
-                    tokens_used=ai_response.get('tokens_used', 0),
+                    response=ai_response.get('answer', ''),
+                    tokens_used=0,
                     processing_time=processing_time,
                     success=True
                 )
@@ -388,10 +387,9 @@ class AIConversationViewSet(viewsets.ModelViewSet):
         conversation = self.get_object()
         
         try:
-            rag_service = RAGService()
+            from apps.ai import services as ai_services
             start_time = time.time()
-            
-            result = rag_service.summarize_case(str(conversation.case.id))
+            result = ai_services.summarize_case(request.user, conversation.case, summary_type='case')
             processing_time = time.time() - start_time
             
             if result.get('success'):
@@ -438,10 +436,9 @@ class AIConversationViewSet(viewsets.ModelViewSet):
         conversation = self.get_object()
         
         try:
-            rag_service = RAGService()
+            from apps.ai import services as ai_services
             start_time = time.time()
-            
-            result = rag_service.generate_timeline(str(conversation.case.id))
+            result = ai_services.summarize_case(request.user, conversation.case, summary_type='case')
             processing_time = time.time() - start_time
             
             if result.get('success'):
@@ -485,3 +482,61 @@ class AIQueryViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         return AIQuery.objects.filter(user=self.request.user).order_by('-created_at')
+
+
+class CaseAIHearingSummaryAPIView(CaseAssistantMixin, APIView):
+    """Summarize a specific hearing of a case (spec §32)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, case_id, hearing_id):
+        from apps.hearings.models import Hearing
+        case = self.get_case(case_id)
+        self.ensure_access(request.user, case)
+        hearing = Hearing.objects.filter(id=hearing_id, case=case).first()
+        if not hearing:
+            return Response({'error': 'Hearing not found'}, status=status.HTTP_404_NOT_FOUND)
+        from apps.ai import services as ai_services
+        start = time.time()
+        result = ai_services.summarize_hearing(request.user, case, hearing)
+        processing_time = time.time() - start
+        self.log_query(
+            user=request.user, case=case, query_type='summarize',
+            query_text=f'Summarize hearing #{hearing.hearing_number}',
+            response=result.get('summary', ''),
+            tokens_used=0, processing_time=processing_time,
+            success=result.get('success', False),
+            error_message=result.get('error', ''),
+        )
+        if result.get('success'):
+            return Response({'summary': result.get('summary', ''), 'citations': result.get('citations', []),
+                             'warnings': result.get('warnings', []), 'processing_time': processing_time})
+        return Response({'error': result.get('error', 'Failed to summarize hearing')},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+
+class CaseAIDocumentSummaryAPIView(CaseAssistantMixin, APIView):
+    """Summarize the authorized documents of a case (spec §32)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, case_id):
+        case = self.get_case(case_id)
+        self.ensure_access(request.user, case)
+        from apps.ai import services as ai_services
+        start = time.time()
+        result = ai_services.summarize_documents(request.user, case)
+        processing_time = time.time() - start
+        self.log_query(
+            user=request.user, case=case, query_type='summarize',
+            query_text='Summarize case documents',
+            response=result.get('summary', ''),
+            tokens_used=0, processing_time=processing_time,
+            success=result.get('success', False),
+            error_message=result.get('error', ''),
+        )
+        if result.get('success'):
+            return Response({'summary': result.get('summary', ''), 'citations': result.get('citations', []),
+                             'warnings': result.get('warnings', []), 'processing_time': processing_time})
+        return Response({'error': result.get('error', 'Failed to summarize documents')},
+                        status=status.HTTP_400_BAD_REQUEST)

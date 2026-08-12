@@ -135,3 +135,47 @@ class TwoFactorAuth(models.Model):
 
     def __str__(self):
         return f"2FA {'enabled' if self.is_enabled else 'disabled'} for {self.user.email}"
+
+
+class TwoFactorRecoveryCode(models.Model):
+    """
+    One-time recovery codes for 2FA (spec §46). Stored as SHA-256 hashes;
+    plaintext is shown once at issuance. A recovery code can be used at the
+    login challenge in place of a TOTP code if the authenticator app is lost.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    two_factor = models.ForeignKey(TwoFactorAuth, on_delete=models.CASCADE, related_name='recovery_codes')
+    code_hash = models.CharField(max_length=64, db_index=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['two_factor', 'used_at'])]
+
+    def __str__(self):
+        return f"Recovery code {'used' if self.used_at else 'unused'} for {self.two_factor.user.email}"
+
+
+class TwoFactorWebAuthnCredential(models.Model):
+    """
+    WebAuthn/passkey credential record (spec §46, pluggable MFA providers).
+    The full attestation/verification flow requires a WebAuthn server
+    (e.g. py_webauthn) and browser navigator.credentials; this model stores
+    the registered credential so a provider can be wired without a schema
+    change.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    two_factor = models.ForeignKey(TwoFactorAuth, on_delete=models.CASCADE, related_name='webauthn_credentials')
+    label = models.CharField(max_length=100, blank=True)
+    credential_id = models.TextField(help_text='Base64url credential ID')
+    public_key = models.TextField(help_text='Base64url COSE public key')
+    sign_count = models.PositiveIntegerField(default=0)
+    transports = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['two_factor'])]
+
+    def __str__(self):
+        return f"WebAuthn credential {self.label or self.credential_id[:12]} for {self.two_factor.user.email}"

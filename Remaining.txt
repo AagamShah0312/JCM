@@ -10,3 +10,14 @@ Main website will run on localhost:3000
 Add your Gemini API key to JudicialCaseManagementSystem/.env:
 GEMINI_API_KEY=
 (Get a free key at https://aistudio.google.com/apikey)
+
+#LAWYER
+aagam0312@gmail.com
+Aagam%14884
+
+#Guest
+neha354_shah@yahoo.com
+Neha%1234
+
+#ADMIN
+Jaihind123@gmail.com
