@@ -251,6 +251,97 @@ class AuditAppendOnlyTests(TestCase):
             log.delete()
 
 
+class HearingParticipantTests(APITestCase):
+    """Hearing participants (attendance) endpoint."""
+
+    def setUp(self):
+        self.admin, self.judge, self.other_judge, self.lawyer, *_ = make_users()
+        self.case = make_case(self.admin, self.judge, self.lawyer)
+        from apps.hearings.models import Hearing
+        self.hearing = Hearing.objects.create(
+            case=self.case, hearing_number=1,
+            date=timezone.now().date() + timedelta(days=3),
+            judge=self.judge, created_by=self.judge,
+        )
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def test_judge_adds_and_lists_participants(self):
+        self._auth(self.judge)
+        resp = self.client.post(f'/api/hearings/{self.hearing.id}/participants/', {
+            'name': 'Witness Kumar', 'role': 'witness', 'status': 'PRESENT',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        resp = self.client.get(f'/api/hearings/{self.hearing.id}/participants/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+
+    def test_lawyer_cannot_add_participants(self):
+        self._auth(self.lawyer)
+        resp = self.client.post(f'/api/hearings/{self.hearing.id}/participants/', {
+            'name': 'Nope', 'role': 'witness', 'status': 'PRESENT',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class CalendarEventTests(APITestCase):
+    """Calendar endpoint returns case_id for deep links (spec §27)."""
+
+    def setUp(self):
+        self.admin, self.judge, self.other_judge, self.lawyer, *_ = make_users()
+        self.case = make_case(self.admin, self.judge, self.lawyer)
+        from apps.hearings.models import Hearing
+        Hearing.objects.create(
+            case=self.case, hearing_number=1,
+            date=timezone.now().date() + timedelta(days=2),
+            judge=self.judge, created_by=self.judge,
+        )
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def test_calendar_events_have_case_id(self):
+        self._auth(self.judge)
+        start = (timezone.now().date() - timedelta(days=1)).isoformat()
+        end = (timezone.now().date() + timedelta(days=7)).isoformat()
+        resp = self.client.get(f'/api/analytics/calendar/?start={start}&end={end}')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        hearings = [e for e in resp.data['events'] if e['type'] == 'hearing']
+        self.assertGreaterEqual(len(hearings), 1)
+        self.assertEqual(hearings[0]['case_id'], str(self.case.id))
+
+
+class WhatChangedTests(APITestCase):
+    """What-changed endpoint surfaces case activity (spec §39)."""
+
+    def setUp(self):
+        self.admin, self.judge, self.other_judge, self.lawyer, *_ = make_users()
+        self.case = make_case(self.admin, self.judge, self.lawyer)
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def test_what_changed_shows_hearing_activity(self):
+        import urllib.parse
+        from apps.hearings.models import Hearing
+        # Create a hearing AFTER the 'since' timestamp
+        since = timezone.now() - timedelta(hours=1)
+        Hearing.objects.create(
+            case=self.case, hearing_number=1,
+            date=timezone.now().date() + timedelta(days=2),
+            judge=self.judge, created_by=self.judge,
+        )
+        self._auth(self.judge)
+        # URL-encode the ISO timestamp (+ in the tz offset must be %2B)
+        encoded = urllib.parse.quote(since.isoformat())
+        resp = self.client.get(
+            f'/api/analytics/cases/{self.case.id}/what-changed/?since={encoded}'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(resp.data['changes']), 1)
+
+
 class AIRetrievalPermissionTests(TestCase):
     """Authorization BEFORE retrieval (spec §34) — critical security test."""
 
