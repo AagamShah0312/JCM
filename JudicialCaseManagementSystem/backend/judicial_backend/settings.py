@@ -67,6 +67,10 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'judicial_backend.urls'
 
+# API clients (Next.js frontend) always use trailing slashes. Disabling
+# APPEND_SLASH avoids redirect loops between the Next proxy and Django.
+APPEND_SLASH = False
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
