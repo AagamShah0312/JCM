@@ -1,4 +1,4 @@
-﻿from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 
@@ -7,7 +7,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from apps.authentication.models import User
-        from apps.cases.models import Case, CaseTimeline, CaseAssignment
+        from apps.cases.models import Case, CaseEvent, CaseAssignment
         from apps.notifications.models import Notification
 
         now = timezone.now()
@@ -97,11 +97,12 @@ class Command(BaseCommand):
             self.stdout.write(f'Sample case already exists: {case_number}')
 
         # Add a timeline event
-        if not CaseTimeline.objects.filter(case=case, event_type='filing').exists():
-            evt = CaseTimeline.objects.create(
+        if not CaseEvent.objects.filter(case=case, event_type='CASE_FILED').exists():
+            evt = CaseEvent.objects.create(
                 case=case,
-                event_type='filing',
-                event_description='Case filed with initial petition',
+                event_type='CASE_FILED',
+                title='Case filed with initial petition',
+                description='Case filed with initial petition',
                 event_date=now.date(),
                 created_by=admin
             )

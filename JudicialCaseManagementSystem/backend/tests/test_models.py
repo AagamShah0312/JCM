@@ -91,7 +91,7 @@ class JudicialWorkflowAPITest(APITestCase):
             'case_type': 'Civil',
             'filing_date': timezone.now().date().isoformat(),
             'next_hearing_date': (timezone.now().date() + timedelta(days=10)).isoformat(),
-            'status': 'pending',
+            'status': 'PENDING',
             'plaintiff_name': 'A',
             'defendant_name': 'B',
             'assigned_judge': str(self.judge.id),
@@ -105,7 +105,10 @@ class JudicialWorkflowAPITest(APITestCase):
 
         self.client.force_authenticate(self.admin)
         admin_delete = self.client.delete(f"/api/cases/{response.data['id']}/")
-        self.assertEqual(admin_delete.status_code, status.HTTP_204_NO_CONTENT)
+        # Soft-delete: cases are archived, not hard-deleted (spec §56)
+        self.assertEqual(admin_delete.status_code, status.HTTP_200_OK)
+        from apps.cases.models import Case
+        self.assertTrue(Case.objects.get(case_number='JUDGE-0001').is_archived)
 
     def test_judge_updates_hearing_with_document_extraction(self):
         self.client.force_authenticate(self.judge)
@@ -144,9 +147,20 @@ class JudicialWorkflowAPITest(APITestCase):
         self.assertEqual(self.lawyer.role, 'judge')
 
     def test_guest_can_view_but_not_modify_cases(self):
+        # Guests can only see cases explicitly marked public (spec §24/§25).
+        from apps.cases.models import Case
+        Case.objects.filter(id=self.case.id).update(is_public=True)
+        self.case.refresh_from_db()
+
         self.client.force_authenticate(self.guest)
         list_response = self.client.get('/api/cases/')
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
 
         patch_response = self.client.patch(f'/api/cases/{self.case.id}/', {'title': 'Changed'}, format='json')
         self.assertEqual(patch_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # A guest cannot even discover a non-public case (information hiding).
+        from apps.cases.models import Case
+        Case.objects.filter(id=self.case.id).update(is_public=False)
+        hidden = self.client.get(f'/api/cases/{self.case.id}/')
+        self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)

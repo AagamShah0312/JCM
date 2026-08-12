@@ -113,3 +113,47 @@ class AIQuery(models.Model):
     
     def __str__(self):
         return f"{self.query_type} - {self.query_text[:50]}"
+
+
+class AICitation(models.Model):
+    """
+    A source reference attached to an AI answer. The UI can render these as
+    clickable links to the relevant case/hearing/proceeding/document/order.
+    """
+    SOURCE_TYPES = [
+        ('case', 'Case'),
+        ('hearing', 'Hearing'),
+        ('proceeding', 'Proceeding'),
+        ('document', 'Document'),
+        ('order', 'Order'),
+        ('party', 'Party'),
+        ('event', 'Timeline Event'),
+        ('chunk', 'Document Chunk'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    message = models.ForeignKey(
+        AIMessage, on_delete=models.CASCADE, related_name='citations', null=True, blank=True
+    )
+    query = models.ForeignKey(
+        AIQuery, on_delete=models.CASCADE, related_name='citations', null=True, blank=True
+    )
+    source_type = models.CharField(max_length=30, choices=SOURCE_TYPES)
+    source_id = models.UUIDField(null=True, blank=True)
+    source_label = models.CharField(max_length=255, help_text='Human-readable label, e.g. Hearing #7 - 25 July 2026')
+    page_number = models.PositiveIntegerField(null=True, blank=True)
+    chunk_index = models.PositiveIntegerField(null=True, blank=True)
+    excerpt = models.TextField(blank=True)
+    url = models.CharField(max_length=500, blank=True)
+    metadata = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['message']),
+            models.Index(fields=['source_type', 'source_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_source_type_display()} {self.source_label}"

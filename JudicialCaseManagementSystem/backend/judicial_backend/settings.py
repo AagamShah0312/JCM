@@ -40,10 +40,15 @@ INSTALLED_APPS = [
     # Local apps
     'apps.authentication.apps.AuthenticationConfig',
     'apps.cases.apps.CasesConfig',
+    'apps.courts.apps.CourtsConfig',
     'apps.documents.apps.DocumentsConfig',
+    'apps.hearings.apps.HearingsConfig',
+    'apps.orders.apps.OrdersConfig',
+    'apps.tasks.apps.TasksConfig',
     'apps.notifications.apps.NotificationsConfig',
     'apps.ai_assistant.apps.AiAssistantConfig',
     'apps.audit.apps.AuditConfig',
+    'apps.analytics.apps.AnalyticsConfig',
 ]
 
 MIDDLEWARE = [
@@ -235,3 +240,46 @@ PINECONE_INDEX = config('PINECONE_INDEX', default='judicial-cases')
 # Admin access controls
 ADMIN_SIGNUP_CODE = config('ADMIN_SIGNUP_CODE', default='JCM-ADMIN-SIGNUP-2026')
 ADMIN_LOGIN_CODE = config('ADMIN_LOGIN_CODE', default='JCM-ADMIN-LOGIN-2026')
+
+# ---------------------------------------------------------------------------
+# JCM Enterprise additions
+# ---------------------------------------------------------------------------
+
+# PostgreSQL + pgvector
+# pgvector extension is created via the first migration (RunSQL).
+VECTOR_EMBEDDING_DIM = int(config('VECTOR_EMBEDDING_DIM', default=768))
+EMBEDDING_MODEL = config('EMBEDDING_MODEL', default='gemini-embedding-001')
+
+# Celery / Redis
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+CELERY_BEAT_SCHEDULE = {}
+
+# Object storage abstraction
+# storage backend: 'local' (default) or 's3'
+STORAGE_BACKEND = config('STORAGE_BACKEND', default='local')
+S3_ENDPOINT = config('S3_ENDPOINT', default='')
+S3_BUCKET = config('S3_BUCKET', default='')
+S3_ACCESS_KEY = config('S3_ACCESS_KEY', default='')
+S3_SECRET_KEY = config('S3_SECRET_KEY', default='')
+S3_REGION = config('S3_REGION', default='us-east-1')
+S3_PUBLIC_BASE_URL = config('S3_PUBLIC_BASE_URL', default='')
+# Signed URL lifetime in seconds
+SIGNED_URL_TTL = int(config('SIGNED_URL_TTL', default=300))
+
+# AI provider abstraction
+# ai_provider: 'gemini' (default) | 'openai' | 'anthropic' | 'local'
+AI_PROVIDER = config('AI_PROVIDER', default='gemini')
+AI_CHAT_MODEL = config('AI_CHAT_MODEL', default=GEMINI_MODEL)
+AI_TEMPERATURE = float(config('AI_TEMPERATURE', default=0.2))
+AI_MAX_OUTPUT_TOKENS = int(config('AI_MAX_OUTPUT_TOKENS', default=2048))
+AI_EMBEDDING_MODEL = config('AI_EMBEDDING_MODEL', default=EMBEDDING_MODEL)
+
+# Request ID middleware / logging
+REQUEST_ID_HEADER = 'HTTP_X_REQUEST_ID'

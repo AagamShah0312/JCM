@@ -68,3 +68,38 @@ class LoginHistory(models.Model):
     
     def __str__(self):
         return f"{self.user.email} - {self.login_time}"
+
+
+class JudgeProfile(models.Model):
+    """Professional profile for a judge."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='judge_profile')
+    designation = models.CharField(max_length=150, blank=True)
+    court = models.ForeignKey(
+        'courts.Court', on_delete=models.SET_NULL, null=True, blank=True, related_name='judges'
+    )
+    default_courtroom = models.ForeignKey(
+        'courts.Courtroom', on_delete=models.SET_NULL, null=True, blank=True, related_name='presiding_judges'
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.get_full_name() or self.user.email} ({self.designation})"
+
+
+class LawyerProfile(models.Model):
+    """Professional profile for a lawyer."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='lawyer_profile')
+    bar_registration_number = models.CharField(max_length=100, blank=True)
+    bar_council = models.CharField(max_length=150, blank=True)
+    firm_name = models.CharField(max_length=200, blank=True)
+    practice_area = models.CharField(max_length=150, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.get_full_name() or self.user.email} ({self.bar_registration_number})"
