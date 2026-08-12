@@ -64,6 +64,7 @@ class Command(BaseCommand):
             ('lawyer.shah@example.com', 'Arjun', 'Shah', 'lawyer', 'BAR-501'),
             ('lawyer.iyer@example.com', 'Meera', 'Iyer', 'lawyer', 'BAR-502'),
             ('lawyer.joshi@example.com', 'Nikhil', 'Joshi', 'lawyer', 'BAR-503'),
+            ('guest.public@example.com', 'Guest', 'Public', 'guest', None),
         ]
         users = {}
         for email, fn, ln, role, pid in users_data:
@@ -75,7 +76,8 @@ class Command(BaseCommand):
                 u.is_verified = True
             u.set_password('Aagam%1234')
             u.save()
-            users[role + '_' + pid.split('-')[-1]] = u
+            key = role + '_' + (pid.split('-')[-1] if pid else 'public')
+            users[key] = u
 
         admin = users['admin_001']
         judge1 = users['judge_101']
