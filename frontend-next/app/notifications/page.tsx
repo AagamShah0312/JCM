@@ -4,13 +4,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import { Card, SectionTitle, LoadingState, ErrorState, EmptyState, Badge } from '@/components/ui';
-import { notificationsApi } from '@/lib/services';
+import { notificationsApi, unwrapList } from '@/lib/services';
 import { timeAgo } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 export default function NotificationsPage() {
   const qc = useQueryClient();
-  const notifs = useQuery({ queryKey: ['notifications'], queryFn: () => notificationsApi.list().then((r) => r.data) });
+  const notifs = useQuery({ queryKey: ['notifications'], queryFn: () => notificationsApi.list().then((r) => unwrapList(r.data)) });
   const markAll = useMutation({
     mutationFn: () => notificationsApi.markAll(),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['notifications'] }); toast.success('All marked as read'); },

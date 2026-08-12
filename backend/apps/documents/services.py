@@ -31,10 +31,8 @@ def generate_and_store_embeddings(document_id: str, model: str = None) -> dict:
         logger.error(f"embed_texts failed for {document_id}: {exc}")
         raise
 
-    from pgvector.django import Vector
-
     for chunk, vector in zip(chunks, vectors):
-        chunk.embedding = Vector(vector)
+        chunk.embedding = list(vector)
         chunk.embedding_model = model
         chunk.save(update_fields=['embedding', 'embedding_model'])
 

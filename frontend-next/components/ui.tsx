@@ -107,9 +107,10 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
   );
 }
 
-export function RoleBadge({ role }: { role: Role }) {
-  const tone = role === 'admin' ? 'red' : role === 'judge' ? 'violet' : role === 'lawyer' ? 'blue' : 'slate';
-  return <Badge tone={tone}>{role}</Badge>;
+export function RoleBadge({ role }: { role?: Role | string | null }) {
+  const r = (role || 'guest') as Role;
+  const tone = r === 'admin' ? 'red' : r === 'judge' ? 'violet' : r === 'lawyer' ? 'blue' : 'slate';
+  return <Badge tone={tone}>{r}</Badge>;
 }
 
 export function NavLink({ href, active, children }: { href: string; active?: boolean; children: React.ReactNode }) {

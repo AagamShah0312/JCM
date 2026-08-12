@@ -12,8 +12,11 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python packaging dirs only — never ignore the Next.js lib/
+/lib/
 lib64/
+!frontend-next/lib/
+!frontend-next/lib/**
 parts/
 sdist/
 var/

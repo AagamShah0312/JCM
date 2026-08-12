@@ -1,34 +1,28 @@
-# Dockerfile for Django Backend
-FROM python:3.11-slim
+# Django backend — Python 3.12
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    postgresql-client \
-    libpq-dev \
-    build-essential \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        postgresql-client \
+        libpq-dev \
+        build-essential \
+        tesseract-ocr \
+        libtesseract-dev \
+        libgl1 \
+        libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
 COPY backend/requirements.txt .
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
-
-# Copy application
 COPY backend/ .
-
-# Create necessary directories
 RUN mkdir -p staticfiles logs media
 
-# Collect static files
-RUN python manage.py collectstatic --noinput || true
-
-# Create superuser (optional, for initial setup)
-# RUN python manage.py createsuperuser --noinput --username admin --email admin@example.com || true
-
 EXPOSE 8000
-
-CMD ["gunicorn", "judicial_backend.wsgi:application", "--bind", "0.0.0.0:8000"]
+CMD ["gunicorn", "judicial_backend.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]

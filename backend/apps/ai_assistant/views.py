@@ -202,6 +202,7 @@ class CaseAIChatAPIView(CaseAssistantMixin, APIView):
             'user_message': AIMessageSerializer(user_message).data,
             'assistant_message': AIMessageSerializer(assistant_message).data,
             'messages': self.serialize_messages(conversation),
+            'answer': structured.get('answer') or assistant_message.content,
             'sources': structured.get('sources', []),
             'citations': structured.get('citations', []),
             'warnings': structured.get('warnings', []),

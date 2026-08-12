@@ -1,42 +1,45 @@
 {
-  "name": "jcm-frontend-next",
-  "version": "0.1.0",
+  "name": "jcm-frontend",
+  "version": "2.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev -p 3000 --hostname 0.0.0.0",
     "build": "next build",
-    "start": "next start -p 3000",
+    "start": "next start -p 3000 --hostname 0.0.0.0",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.7.1",
-    "@tanstack/react-query": "^5.51.0",
-    "axios": "^1.7.2",
+    "@hookform/resolvers": "^5.2.2",
+    "@tanstack/react-query": "^5.90.2",
+    "axios": "^1.12.2",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.417.0",
-    "next": "^14.2.35",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-hook-form": "^7.52.1",
-    "react-hot-toast": "^2.4.1",
-    "recharts": "^2.12.7",
-    "zod": "^3.23.8",
-    "zustand": "^4.5.4"
+    "lucide-react": "^0.544.0",
+    "next": "^15.5.4",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-hook-form": "^7.62.0",
+    "react-hot-toast": "^2.6.0",
+    "recharts": "^3.2.1",
+    "zod": "^3.25.76",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "@vitejs/plugin-react": "^6.0.5",
-    "autoprefixer": "^10.4.19",
-    "jsdom": "^29.1.1",
-    "postcss": "^8.4.39",
-    "tailwindcss": "^3.4.6",
-    "typescript": "^5",
-    "vitest": "^4.1.10"
+    "@types/node": "^22.18.6",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
+    "autoprefixer": "^10.4.21",
+    "jsdom": "^27.0.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
   }
 }

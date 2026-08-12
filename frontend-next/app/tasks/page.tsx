@@ -11,7 +11,7 @@ import { useState } from 'react';
 
 export default function TasksPage() {
   const qc = useQueryClient();
-  const tasks = useQuery({ queryKey: ['tasks'], queryFn: () => tasksApi.list().then((r) => r.data) });
+  const tasks = useQuery({ queryKey: ['tasks'], queryFn: () => tasksApi.list().then((r) => unwrapList(r.data)) });
   const cases = useQuery({ queryKey: ['cases-min'], queryFn: () => casesApi.list().then((r) => r.data) });
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>({ title: '', case: '', priority: 'NORMAL', due_date: '' });

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 import { Card, SectionTitle, LoadingState, ErrorState, StatusBadge, Badge, EmptyState } from '@/components/ui';
-import { casesApi, hearingsApi, ordersApi, documentsApi, tasksApi, analyticsApi } from '@/lib/services';
+import { casesApi, hearingsApi, ordersApi, documentsApi, tasksApi, analyticsApi, unwrapList } from '@/lib/services';
 import AIAssistantPanel from '@/components/AIAssistantPanel';
 import { formatDate, formatDateTime, timeAgo } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -35,11 +35,11 @@ export default function CaseDetailPage() {
   const [tab, setTab] = useState('overview');
 
   const caseQ = useQuery({ queryKey: ['case', id], queryFn: () => casesApi.retrieve(id).then((r) => r.data) });
-  const hearingsQ = useQuery({ queryKey: ['case-hearings', id], queryFn: () => hearingsApi.list({ case: id }).then((r) => r.data) });
-  const docsQ = useQuery({ queryKey: ['case-docs', id], queryFn: () => documentsApi.list({ case: id }).then((r) => r.data) });
-  const ordersQ = useQuery({ queryKey: ['case-orders', id], queryFn: () => ordersApi.list({ case: id }).then((r) => r.data) });
-  const tasksQ = useQuery({ queryKey: ['case-tasks', id], queryFn: () => tasksApi.list({ case: id }).then((r) => r.data) });
-  const timelineQ = useQuery({ queryKey: ['case-timeline', id], queryFn: () => casesApi.timeline(id).then((r) => r.data) });
+  const hearingsQ = useQuery({ queryKey: ['case-hearings', id], queryFn: () => hearingsApi.list({ case: id }).then((r) => unwrapList(r.data)) });
+  const docsQ = useQuery({ queryKey: ['case-docs', id], queryFn: () => documentsApi.list({ case: id }).then((r) => unwrapList(r.data)) });
+  const ordersQ = useQuery({ queryKey: ['case-orders', id], queryFn: () => ordersApi.list({ case: id }).then((r) => unwrapList(r.data)) });
+  const tasksQ = useQuery({ queryKey: ['case-tasks', id], queryFn: () => tasksApi.list({ case: id }).then((r) => unwrapList(r.data)) });
+  const timelineQ = useQuery({ queryKey: ['case-timeline', id], queryFn: () => casesApi.timeline(id).then((r) => unwrapList(r.data)) });
   const healthQ = useQuery({ queryKey: ['case-health', id], queryFn: () => analyticsApi.caseHealth(id).then((r) => r.data), enabled: !!user });
 
   const caseData = caseQ.data;

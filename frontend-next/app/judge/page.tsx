@@ -19,13 +19,13 @@ export default function JudgeDashboard() {
   if (hearings.isLoading || cases.isLoading) return <AppShell><LoadingState /></AppShell>;
   if (hearings.error) return <AppShell><ErrorState message="Could not load dashboard" /></AppShell>;
 
-  const allHearings = hearings.data || [];
+  const allHearings = unwrapList(hearings.data);
   const todays = allHearings.filter((h) => h.date === today);
   const upcoming = allHearings.filter((h) => h.date > today && h.status === 'SCHEDULED');
   const allCases = unwrapList(cases.data);
   const pending = allCases.filter((c) => ['PENDING', 'FILED', 'REGISTERED'].includes(c.status));
   const urgent = allCases.filter((c) => c.priority === 'URGENT');
-  const ordersPending = (orders.data || []).filter((o) => o.status === 'DRAFT').length;
+  const ordersPending = unwrapList(orders.data).filter((o) => o.status === 'DRAFT').length;
 
   return (
     <AppShell>

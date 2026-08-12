@@ -162,4 +162,10 @@ The backend already has: custom `User` (email login, roles admin/judge/lawyer/gu
 2. **P2 Document pipeline + AI core**: Celery tasks, storage, embeddings, provider abstraction, permission-filtered retrieval, citations.
 3. **P3 API layer**: serializers/views per role, error handling, CSV import wizard, analytics, cause list, calendar, case health, what-changed, comparison, notifications.
 4. **P4 Frontend**: Next.js app shell + dashboards + case workspace + guest portal + admin console.
-5. **P5 Infra/quality**: docker-compose, tests, seed data, docs, end-to-end demo.
+5. **P5 Infra/quality**: docker-compose, tests, seed data, docs, end-to-end demo. ✅
+
+## 2026-08-12 follow-up (main)
+
+- Restored `frontend-next/lib/` (was gitignored by the Python `lib/` rule — the Next app could not build from a fresh clone).
+- Primary stack now: **Next.js 15 / React 19 / Node 22**, **Django 5.2 LTS / Python 3.12**, root `docker-compose.yml` with Postgres+pgvector, Redis, MinIO, Celery, Nginx.
+- CI paths updated after the repository flatten. 52 backend tests + 13 frontend tests passing.

@@ -44,9 +44,10 @@ describe('caseCreateSchema (spec §8/§53)', () => {
     expect(caseCreateSchema.safeParse(base).success).toBe(true);
   });
 
-  it('defaults priority to NORMAL', () => {
+  it('defaults priority to NORMAL when omitted', () => {
     const r = caseCreateSchema.safeParse(base);
-    expect(r.success && r.data.priority).toBe('NORMAL');
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.priority).toBe('NORMAL');
   });
 
   it('rejects missing title', () => {

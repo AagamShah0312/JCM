@@ -18,9 +18,11 @@ export default function LawyerDashboard() {
 
   const myCases = unwrapList(cases.data);
   const today = new Date().toISOString().slice(0, 10);
-  const todays = (hearings.data || []).filter((h) => h.date === today);
-  const upcoming = (hearings.data || []).filter((h) => h.date > today && h.status === 'SCHEDULED');
-  const unread = (notifs.data || []).filter((n) => !n.is_read);
+  const hearingList = unwrapList(hearings.data);
+  const notifList = unwrapList(notifs.data);
+  const todays = hearingList.filter((h) => h.date === today);
+  const upcoming = hearingList.filter((h) => h.date > today && h.status === 'SCHEDULED');
+  const unread = notifList.filter((n) => !n.is_read);
 
   return (
     <AppShell>
@@ -59,13 +61,13 @@ export default function LawyerDashboard() {
         <Card>
           <h3 className="mb-3 text-sm font-semibold text-slate-700"><FileText size={16} className="mr-1 inline" /> Recent Notifications</h3>
           <ul className="divide-y divide-slate-100">
-            {(notifs.data || []).slice(0, 8).map((n) => (
+            {notifList.slice(0, 8).map((n) => (
               <li key={n.id} className={`py-2 text-sm ${n.is_read ? 'text-slate-500' : 'font-medium text-slate-800'}`}>
                 <p>{n.title}</p>
                 <p className="text-xs text-slate-400">{n.message} · {timeAgo(n.created_at)}</p>
               </li>
             ))}
-            {(notifs.data || []).length === 0 && <p className="py-4 text-sm text-slate-400">No notifications.</p>}
+            {notifList.length === 0 && <p className="py-4 text-sm text-slate-400">No notifications.</p>}
           </ul>
         </Card>
       </div>

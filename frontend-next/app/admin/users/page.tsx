@@ -5,6 +5,7 @@ import { Users } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 import { Card, SectionTitle, LoadingState, ErrorState, RoleBadge } from '@/components/ui';
 import api from '@/lib/api';
+import { unwrapList } from '@/lib/services';
 
 export default function UsersPage() {
   const { data, isLoading, error } = useQuery({ queryKey: ['users'], queryFn: () => api.get('/auth/users/').then((r) => r.data) });
@@ -21,7 +22,7 @@ export default function UsersPage() {
               <tr><th>Name</th><th>Email</th><th>Role</th><th>Professional ID</th><th>Verified</th></tr>
             </thead>
             <tbody>
-              {(data || []).map((u: any) => (
+              {unwrapList(data).map((u: any) => (
                 <tr key={u.id}>
                   <td className="font-medium text-slate-800">{(u.first_name || '') + ' ' + (u.last_name || '')}</td>
                   <td>{u.email}</td>

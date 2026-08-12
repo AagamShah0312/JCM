@@ -5,7 +5,12 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
 from rest_framework_simplejwt.views import TokenRefreshView
+
+
+def health(_request):
+    return JsonResponse({'status': 'ok', 'service': 'jcm-backend'})
 
 api_patterns = [
     path('auth/', include('apps.authentication.urls')),
@@ -26,6 +31,8 @@ api_patterns = [
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('health/', health),
+    path('api/health/', health),
     path('api/', include(api_patterns)),
     # Versioned alias (spec §48: clean REST APIs with versioning)
     path('api/v1/', include(api_patterns)),

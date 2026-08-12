@@ -27,7 +27,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: JudicialCaseManagementSystem/backend
+        working-directory: backend
 
     steps:
       - uses: actions/checkout@v4
@@ -39,18 +39,10 @@ jobs:
       - name: Install system deps (Tesseract OCR)
         run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
 
-      # Lean test dependency set. Heavy ML packages (sentence-transformers,
-      # faiss, pinecone, langchain) are optional lazy imports at runtime and
-      # are intentionally not installed here to keep CI fast/reliable.
-      - name: Install Python deps (test set)
+      - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
-          pip install "Django==4.2.11" "djangorestframework==3.14.0" \
-            "djangorestframework-simplejwt==5.3.1" "django-cors-headers==4.3.1" \
-            "django-filter==24.1" "django-extensions==3.2.3" "python-decouple==3.8" \
-            "Pillow" "requests" "python-multipart" "psycopg2-binary" \
-            "google-genai" "celery==5.3.6" "redis==5.0.1" "boto3" "pgvector" \
-            "pymupdf" "opencv-python-headless" "pytesseract" "python-docx"
+          pip install -r requirements.txt
 
       - name: Django checks
         run: python manage.py check
@@ -64,7 +56,7 @@ jobs:
           ALLOWED_HOSTS: localhost,127.0.0.1
 
       - name: Run tests
-        run: python manage.py test
+        run: python manage.py test --verbosity=2
         env:
           DB_ENGINE: django.db.backends.postgresql
           DB_NAME: judicial_case_test
@@ -75,23 +67,26 @@ jobs:
           ALLOWED_HOSTS: localhost,127.0.0.1
 
   frontend:
-    name: Frontend (Next.js) build
+    name: Frontend (Next.js) build + tests
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: JudicialCaseManagementSystem/frontend-next
+        working-directory: frontend-next
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
-          cache-dependency-path: JudicialCaseManagementSystem/frontend-next/package-lock.json
+          cache-dependency-path: frontend-next/package-lock.json
 
       - name: Install deps
         run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Unit tests
+        run: npm test
 
       - name: Build
         run: npm run build

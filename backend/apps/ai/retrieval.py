@@ -56,10 +56,10 @@ def retrieve_for_query(user, case, query, top_k=MAX_CHUNKS_RETRIEVED):
     try:
         query_vec = embed_texts([query])[0] if query.strip() else None
         if query_vec:
-            from pgvector.django import CosineDistance, Vector
+            from pgvector.django import CosineDistance
             scored = (
                 candidate_qs.filter(embedding__isnull=False)
-                .annotate(distance=CosineDistance('embedding', Vector(query_vec)))
+                .annotate(distance=CosineDistance('embedding', query_vec))
                 .order_by('distance')[:top_k]
             )
             results = []

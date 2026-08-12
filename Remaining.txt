@@ -1,23 +1,11 @@
-To implement AI more strongly i.e., Read uploaded files if asked by the user and give summury type of.
-# How to RUN
-1 Terminal--> go to JudicialCaseManagementSystem/frontend and run npm start
-2 Terminal--> Go to JudicialCaseManagementSystem/backend and run python manage.py runserver
-C:/Users/cebc/anaconda3/Scripts/activate
+The production application is `frontend-next/` + `backend/`.
 
-Main website will run on localhost:3000
+Quick start: see README.md
 
-# AI (Gemini)
-Add your Gemini API key to JudicialCaseManagementSystem/.env:
-GEMINI_API_KEY=
-(Get a free key at https://aistudio.google.com/apikey)
+Demo (fictional) accounts after `python manage.py seed_demo`:
+  Admin   admin@example.com           Aagam%1234
+  Judge   judge.mehta@example.com     Aagam%1234
+  Lawyer  lawyer.shah@example.com     Aagam%1234
+  Guest   guest.public@example.com    Aagam%1234
 
-#LAWYER
-aagam0312@gmail.com
-Aagam%14884
-
-#Guest
-neha354_shah@yahoo.com
-Neha%1234
-
-#ADMIN
-Jaihind123@gmail.com
+AI: set GEMINI_API_KEY in .env (https://aistudio.google.com/apikey)

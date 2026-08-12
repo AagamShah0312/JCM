@@ -6,6 +6,7 @@ import { Gavel } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 import { Card, SectionTitle, LoadingState, ErrorState, EmptyState } from '@/components/ui';
 import api from '@/lib/api';
+import { unwrapList } from '@/lib/services';
 
 export default function CourtsPage() {
   const { data, isLoading, error } = useQuery({ queryKey: ['courts'], queryFn: () => api.get('/courts/').then((r) => r.data) });
