@@ -282,3 +282,95 @@ class UserViewSet(viewsets.ModelViewSet):
         history = LoginHistory.objects.filter(user=user).order_by('-login_time')[:50]
         serializer = LoginHistorySerializer(history, many=True)
         return Response(serializer.data)
+
+
+# ---------------------------------------------------------------------------
+# Admin CSV import wizard (spec §12, §64): parse → validate → preview →
+# confirm → import → report. No unvalidated data is ever inserted.
+# ---------------------------------------------------------------------------
+
+class StaffCSVPreviewView(generics.GenericAPIView):
+    """Preview staff CSV: returns validated rows + row-level errors."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role != 'admin':
+            raise PermissionDenied('Only admins can import staff CSV files')
+        role = request.data.get('role')
+        if role not in ('judge', 'lawyer'):
+            return Response({'error': 'role must be judge or lawyer'}, status=status.HTTP_400_BAD_REQUEST)
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'error': 'file is required'}, status=status.HTTP_400_BAD_REQUEST)
+        from .csv_import import preview_staff_csv
+        result = preview_staff_csv(file_obj, role)
+        return Response({
+            'role': role,
+            'total_rows': result.total_rows,
+            'valid_count': result.valid_count,
+            'error_count': result.error_count,
+            'errors': result.errors[:200],
+            'preview': result.rows[:50],
+        })
+
+
+class StaffCSVImportConfirmView(generics.GenericAPIView):
+    """Confirm + import validated staff rows (must pass the exact rows from preview)."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role != 'admin':
+            raise PermissionDenied('Only admins can import staff CSV files')
+        role = request.data.get('role')
+        rows = request.data.get('rows')
+        if role not in ('judge', 'lawyer') or not isinstance(rows, list) or not rows:
+            return Response({'error': 'role and rows are required'}, status=status.HTTP_400_BAD_REQUEST)
+        from .csv_import import import_staff_rows
+        created, report = import_staff_rows(rows, role, request.user)
+        from apps.audit.services import record_audit
+        record_audit(user=request.user, action='CSV_IMPORT', model_name='User',
+                     object_id='', changes={'role': role, 'created': created, 'total': len(report)},
+                     ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'),
+                     request_id=getattr(request, 'request_id', ''))
+        return Response({'created': created, 'updated': len(report) - created, 'report': report})
+
+
+class CaseCSVPreviewView(generics.GenericAPIView):
+    """Preview cases CSV."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role != 'admin':
+            raise PermissionDenied('Only admins can import cases CSV files')
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'error': 'file is required'}, status=status.HTTP_400_BAD_REQUEST)
+        from .csv_import import preview_case_csv
+        result = preview_case_csv(file_obj)
+        return Response({
+            'total_rows': result.total_rows,
+            'valid_count': result.valid_count,
+            'error_count': result.error_count,
+            'errors': result.errors[:200],
+            'preview': result.rows[:50],
+        })
+
+
+class CaseCSVImportConfirmView(generics.GenericAPIView):
+    """Confirm + import validated case rows."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role != 'admin':
+            raise PermissionDenied('Only admins can import cases CSV files')
+        rows = request.data.get('rows')
+        if not isinstance(rows, list) or not rows:
+            return Response({'error': 'rows are required'}, status=status.HTTP_400_BAD_REQUEST)
+        from .csv_import import import_case_rows
+        created, report = import_case_rows(rows, request.user)
+        from apps.audit.services import record_audit
+        record_audit(user=request.user, action='CSV_IMPORT', model_name='Case',
+                     object_id='', changes={'created': created, 'total': len(report)},
+                     ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'),
+                     request_id=getattr(request, 'request_id', ''))
+        return Response({'created': created, 'report': report})

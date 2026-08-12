@@ -12,10 +12,16 @@ urlpatterns = [
     path('api/auth/', include('apps.authentication.urls')),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/cases/', include('apps.cases.urls')),
+    path('api/courts/', include('apps.courts.urls')),
+    path('api/hearings/', include('apps.hearings.urls')),
+    path('api/orders/', include('apps.orders.urls')),
     path('api/documents/', include('apps.documents.urls')),
+    path('api/tasks/', include('apps.tasks.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/ai/', include('apps.ai_assistant.urls')),
     path('api/audit/', include('apps.audit.urls')),
+    path('api/analytics/', include('apps.analytics.urls')),
+    path('api/public/', include('apps.cases.public_urls')),
 ]
 
 # Serve media files in development

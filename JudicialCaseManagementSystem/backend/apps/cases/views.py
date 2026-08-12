@@ -24,6 +24,7 @@ from .serializers import (
 from .permissions import (
     can_view_case, can_edit_case, can_delete_case, case_queryset_for,
 )
+from apps.common.exceptions import PermissionDeniedError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -75,24 +76,24 @@ class CaseViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         if request.user.role not in ['admin', 'judge']:
-            return Response({'error': 'Only admins and judges can create cases'}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDeniedError('PERMISSION_DENIED', 'Only admins and judges can create cases')
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
         case = self.get_object()
         if not can_edit_case(request.user, case):
-            return Response({'error': 'Only admins or the assigned judge can update cases'}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDeniedError('PERMISSION_DENIED', 'Only admins or the assigned judge can update cases')
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
         case = self.get_object()
         if not can_edit_case(request.user, case):
-            return Response({'error': 'Only admins or the assigned judge can update cases'}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDeniedError('PERMISSION_DENIED', 'Only admins or the assigned judge can update cases')
         return super().partial_update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         if not can_delete_case(request.user, self.get_object()):
-            return Response({'error': 'Only admins can delete cases'}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDeniedError('PERMISSION_DENIED', 'Only admins can delete cases')
         # Soft-delete: archive instead of hard delete for judicial records
         case = self.get_object()
         case.is_archived = True
@@ -135,8 +136,7 @@ class CaseViewSet(viewsets.ModelViewSet):
         """Add a timeline event to a case"""
         case = self.get_object()
         if not can_edit_case(request.user, case):
-            return Response({'error': 'Only admins or the assigned judge can add timeline events'},
-                            status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDeniedError('PERMISSION_DENIED', 'Only admins or the assigned judge can add timeline events')
         serializer = CaseEventSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(case=case, created_by=request.user)
@@ -167,8 +167,7 @@ class CaseViewSet(viewsets.ModelViewSet):
         case = self.get_object()
         if request.method == 'POST':
             if not can_edit_case(request.user, case):
-                return Response({'error': 'Only admins or the assigned judge can add parties'},
-                                status=status.HTTP_403_FORBIDDEN)
+                raise PermissionDeniedError('PERMISSION_DENIED', 'Only admins or the assigned judge can add parties')
             serializer = CasePartySerializer(data=request.data)
             if serializer.is_valid():
                 serializer.save(case=case)
@@ -183,8 +182,7 @@ class CaseViewSet(viewsets.ModelViewSet):
         case = self.get_object()
         if request.method == 'POST':
             if not can_edit_case(request.user, case):
-                return Response({'error': 'Only admins or the assigned judge can add lawyers'},
-                                status=status.HTTP_403_FORBIDDEN)
+                raise PermissionDeniedError('PERMISSION_DENIED', 'Only admins or the assigned judge can add lawyers')
             serializer = CaseLawyerSerializer(data=request.data)
             if serializer.is_valid():
                 serializer.save(case=case)
@@ -205,8 +203,7 @@ class CaseViewSet(viewsets.ModelViewSet):
         """Change case status with validation + audit"""
         case = self.get_object()
         if not can_edit_case(request.user, case):
-            return Response({'error': 'Only admins or the assigned judge can change status'},
-                            status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDeniedError('PERMISSION_DENIED', 'Only admins or the assigned judge can change status')
         new_status = request.data.get('status')
         reason = request.data.get('reason', '')
         if not new_status:
@@ -254,6 +251,15 @@ class CaseViewSet(viewsets.ModelViewSet):
                     setattr(assignment, key, value)
                 assignment.is_active = True
                 assignment.save(update_fields=list(assignment_fields.keys()) + ['is_active', 'updated_at'])
+            try:
+                from apps.notifications.services import notify_user
+                notify_user(
+                    lawyer, 'CASE_ASSIGNED', 'Case Assigned',
+                    f"You have been assigned to case {case.case_number}",
+                    case=case, action_url=f"/cases/{case.id}",
+                )
+            except Exception:
+                pass
             CaseEvent.objects.create(
                 case=case,
                 event_type='LAWYER_ASSIGNED',
@@ -283,7 +289,7 @@ class CaseViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def finish(self, request, pk=None):
         if request.user.role != 'admin':
-            return Response({'error': 'Only admins can finish cases'}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDeniedError('PERMISSION_DENIED', 'Only admins can finish cases')
         case = self.get_object()
         try:
             case.change_status('CLOSED', actor=request.user)
@@ -296,7 +302,7 @@ class CaseViewSet(viewsets.ModelViewSet):
         """Admin or assigned judge: move next hearing forward and optionally attach documents."""
         case = self.get_object()
         if not can_edit_case(request.user, case):
-            return Response({'error': 'Only admins or the assigned judge can update hearing date'}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDeniedError('PERMISSION_DENIED', 'Only admins or the assigned judge can update hearing date')
 
         new_date_raw = request.data.get('next_hearing_date')
         if not new_date_raw:
@@ -385,7 +391,7 @@ class CaseViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def bookmark(self, request, pk=None):
         if request.user.role != 'lawyer':
-            return Response({'error': 'Only lawyers can bookmark cases'}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDeniedError('PERMISSION_DENIED', 'Only lawyers can bookmark cases')
         case = self.get_object()
         assignment, _ = CaseAssignment.objects.get_or_create(
             case=case,
@@ -400,7 +406,7 @@ class CaseViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def unbookmark(self, request, pk=None):
         if request.user.role != 'lawyer':
-            return Response({'error': 'Only lawyers can unbookmark cases'}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDeniedError('PERMISSION_DENIED', 'Only lawyers can unbookmark cases')
         case = self.get_object()
         CaseAssignment.objects.filter(case=case, lawyer=request.user).update(is_active=False)
         return Response({'message': 'Case removed from bookmarks'})
@@ -408,7 +414,7 @@ class CaseViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def bookmarked(self, request):
         if request.user.role != 'lawyer':
-            return Response({'error': 'Only lawyers can view bookmarks'}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDeniedError('PERMISSION_DENIED', 'Only lawyers can view bookmarks')
         cases = Case.objects.filter(
             Q(assigned_lawyer=request.user) | Q(assignments__lawyer=request.user, assignments__is_active=True)
         ).distinct().order_by('-created_at')

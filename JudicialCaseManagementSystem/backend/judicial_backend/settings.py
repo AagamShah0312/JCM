@@ -60,6 +60,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # JCM enterprise
+    'apps.common.middleware.RequestIDMiddleware',
+    'apps.common.middleware.AuditMiddleware',
 ]
 
 ROOT_URLCONF = 'judicial_backend.urls'
@@ -134,6 +137,7 @@ AUTH_USER_MODEL = 'authentication.User'
 
 # REST Framework Configuration
 REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'apps.common.exceptions.jcm_exception_handler',
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
@@ -260,6 +264,10 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_BEAT_SCHEDULE = {}
+# Run tasks synchronously when no worker is present (dev convenience).
+# Set CELERY_TASK_ALWAYS_EAGER=False in production with a real worker.
+CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=True, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = True
 
 # Object storage abstraction
 # storage backend: 'local' (default) or 's3'
