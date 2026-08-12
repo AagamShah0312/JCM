@@ -8,7 +8,8 @@ from .views import (
     UserProfileView, UserViewSet, ChangePasswordView,
     StaffCSVPreviewView, StaffCSVImportConfirmView,
     CaseCSVPreviewView, CaseCSVImportConfirmView,
-    CSVErrorReportView, TwoFactorStatusView,
+    CSVErrorReportView, TwoFactorStatusView, TwoFactorEnrollView,
+    TwoFactorVerifyView, TwoFactorDisableView, TwoFactorChallengeView,
 )
 
 router = DefaultRouter()
@@ -20,6 +21,10 @@ urlpatterns = [
     path('logout/', UserLogoutView.as_view(), name='logout'),
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('mfa/status/', TwoFactorStatusView.as_view(), name='mfa-status'),
+    path('mfa/enroll/', TwoFactorEnrollView.as_view(), name='mfa-enroll'),
+    path('mfa/verify/', TwoFactorVerifyView.as_view(), name='mfa-verify'),
+    path('mfa/disable/', TwoFactorDisableView.as_view(), name='mfa-disable'),
+    path('mfa/challenge/', TwoFactorChallengeView.as_view(), name='mfa-challenge'),
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('csv/staff/preview/', StaffCSVPreviewView.as_view(), name='staff-csv-preview'),
     path('csv/staff/import/', StaffCSVImportConfirmView.as_view(), name='staff-csv-import'),

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import {
   LayoutDashboard, History, CalendarDays, FileText, ScrollText, Users, CheckSquare, Bot, Upload, Download,
 } from 'lucide-react';
@@ -355,9 +356,12 @@ function HearingDetailModal({ hearing, onClose, canEdit }: { hearing: Hearing; o
           <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">✕</button>
         </div>
 
-        <div className="mb-3 flex flex-wrap gap-2 text-xs">
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
           <StatusBadge status={hearing.status} />
           {hearing.adjournment_reason && <Badge tone="amber">Adjourned: {hearing.adjournment_reason}</Badge>}
+          <Link href={`/calendar?date=${hearing.date}`} className="ml-auto rounded border border-slate-200 px-2 py-0.5 text-slate-500 hover:border-brand-400 hover:text-brand-600">
+            <CalendarDays size={12} className="mr-1 inline" /> View in calendar
+          </Link>
         </div>
 
         {procs.length > 0 && (

@@ -49,6 +49,7 @@ def retrieve_for_query(user, case, query, top_k=MAX_CHUNKS_RETRIEVED):
     candidate_qs = DocumentChunk.objects.filter(
         document_id__in=doc_ids,
         document__state='ACTIVE',
+        collection='case_documents',
     ).select_related('document', 'case')
 
     # 2) Embedding-based search when possible (pgvector similarity).

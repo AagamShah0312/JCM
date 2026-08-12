@@ -63,6 +63,7 @@ def process_document_task(self, document_id: str):
                 chunk_index=chunk['index'],
                 page_number=chunk.get('page'),
                 text=chunk['text'],
+                collection='case_documents',
                 embedding_model='',
                 document_version=doc.versions.count() + 1 if doc.versions.exists() else 1,
                 visibility=doc.visibility,

@@ -9,6 +9,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils.decorators import method_decorator
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from .models import User, LoginHistory
 from .serializers import (
@@ -69,6 +70,18 @@ class UserLoginView(generics.GenericAPIView):
             )
         except Exception as exc:
             logger.warning(f"LoginHistory write failed for {user.email}: {exc}")
+
+        # MFA challenge (spec §46): if 2FA is enabled, require a code before
+        # issuing JWTs. Password verification already succeeded above.
+        from .mfa import is_mfa_available, is_mfa_enabled, issue_mfa_challenge
+        if is_mfa_available() and is_mfa_enabled(user):
+            challenge = issue_mfa_challenge(user)
+            logger.info(f"User {user.email} passed password step; MFA challenge issued")
+            return Response({
+                'mfa_required': True,
+                'mfa_token': challenge,
+                'user': UserSerializer(user).data,
+            }, status=status.HTTP_200_OK)
         
         # Generate tokens
         refresh = RefreshToken.for_user(user)
@@ -413,21 +426,127 @@ class CSVErrorReportView(generics.GenericAPIView):
 
 class TwoFactorStatusView(generics.GenericAPIView):
     """
-    MFA status for the current user (spec §46, MFA-ready architecture).
-    Returns whether 2FA is available/enabled and the supported providers.
-    The verification flow itself is intentionally not implemented until a
-    provider (TOTP/WebAuthn) is configured.
+    MFA status for the current user (spec §46).
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from django.conf import settings
+        from .mfa import is_mfa_available, is_mfa_enabled, get_or_create_two_factor
         user = request.user
-        two_factor = getattr(user, 'two_factor', None)
+        tf = get_or_create_two_factor(user)
         return Response({
-            'mfa_available': bool(getattr(settings, 'MFA_ENABLED', False)),
-            'mfa_enabled': bool(two_factor and two_factor.is_enabled),
-            'provider': two_factor.provider if two_factor else None,
+            'mfa_available': is_mfa_available(),
+            'mfa_enabled': is_mfa_enabled(user),
+            'provider': tf.provider,
             'providers_supported': ['totp', 'webauthn', 'sms', 'email'],
-            'note': 'MFA provider not configured. Set MFA_ENABLED=True and add a TOTP/WebAuthn provider to enable enrollment.',
+            'note': 'TOTP flow is implemented (enroll/verify/challenge). Set MFA_ENABLED=True in .env to activate.',
         })
+
+
+class TwoFactorEnrollView(generics.GenericAPIView):
+    """
+    Begin TOTP enrollment: generate a secret + provisioning URI + QR image.
+    The secret is stored (encrypted at rest) but 2FA is NOT enabled until
+    the user verifies a code (see TwoFactorVerifyView).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from django.conf import settings
+        if not getattr(settings, 'MFA_ENABLED', False):
+            return Response({'error': 'MFA is not enabled on this instance'}, status=status.HTTP_400_BAD_REQUEST)
+        from .mfa import generate_secret, provisioning_uri, qr_png_data_uri, get_or_create_two_factor
+        user = request.user
+        tf = get_or_create_two_factor(user)
+        if tf.is_enabled:
+            return Response({'error': '2FA is already enabled'}, status=status.HTTP_400_BAD_REQUEST)
+        from .mfa import encrypt_secret
+        secret = generate_secret()
+        tf.provider = 'totp'
+        tf.secret_encrypted = encrypt_secret(secret)
+        tf.save()
+        uri = provisioning_uri(user, secret)
+        return Response({
+            'secret': secret,
+            'otpauth_url': uri,
+            'qr_png': qr_png_data_uri(uri),
+            'issuer': 'JCM',
+            'account': user.email or user.username,
+        })
+
+
+class TwoFactorVerifyView(generics.GenericAPIView):
+    """Verify a TOTP code and enable 2FA for the user."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .mfa import verify_code, get_or_create_two_factor, decrypt_secret
+        code = request.data.get('code', '')
+        user = request.user
+        tf = get_or_create_two_factor(user)
+        if not tf.secret_encrypted:
+            return Response({'error': 'No pending enrollment; call enroll first'}, status=status.HTTP_400_BAD_REQUEST)
+        secret = decrypt_secret(tf.secret_encrypted)
+        if not secret or not verify_code(secret, code):
+            return Response({'error': 'Invalid code'}, status=status.HTTP_400_BAD_REQUEST)
+        tf.is_enabled = True
+        tf.verified_at = timezone.now()
+        tf.save()
+        from apps.audit.services import record_audit
+        record_audit(user=user, action='PERMISSION_CHANGED', model_name='TwoFactorAuth',
+                     object_id=tf.id, changes={'action': 'mfa_enabled'},
+                     ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'))
+        return Response({'mfa_enabled': True, 'message': 'Two-factor authentication enabled'})
+
+
+class TwoFactorDisableView(generics.GenericAPIView):
+    """Disable 2FA after verifying the current TOTP code."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .mfa import verify_code, get_or_create_two_factor, decrypt_secret
+        code = request.data.get('code', '')
+        user = request.user
+        tf = get_or_create_two_factor(user)
+        if not tf.is_enabled:
+            return Response({'error': '2FA is not enabled'}, status=status.HTTP_400_BAD_REQUEST)
+        secret = decrypt_secret(tf.secret_encrypted)
+        if not secret or not verify_code(secret, code):
+            return Response({'error': 'Invalid code'}, status=status.HTTP_400_BAD_REQUEST)
+        tf.is_enabled = False
+        tf.secret_encrypted = ''
+        tf.verified_at = None
+        tf.save()
+        from apps.audit.services import record_audit
+        record_audit(user=user, action='PERMISSION_CHANGED', model_name='TwoFactorAuth',
+                     object_id=tf.id, changes={'action': 'mfa_disabled'},
+                     ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'))
+        return Response({'mfa_enabled': False, 'message': 'Two-factor authentication disabled'})
+
+
+class TwoFactorChallengeView(generics.GenericAPIView):
+    """
+    Exchange a challenge token + TOTP code for full JWT access (spec §46).
+    Called after login returned mfa_required=True.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from .mfa import verify_code, resolve_mfa_challenge, is_mfa_enabled, decrypt_secret
+        token = request.data.get('mfa_token', '')
+        code = request.data.get('code', '')
+        user = resolve_mfa_challenge(token)
+        if not user:
+            return Response({'error': 'Challenge expired or invalid. Please log in again.'}, status=status.HTTP_400_BAD_REQUEST)
+        tf = getattr(user, 'two_factor', None)
+        if not tf or not is_mfa_enabled(user):
+            return Response({'error': '2FA is not enabled for this account'}, status=status.HTTP_400_BAD_REQUEST)
+        secret = decrypt_secret(tf.secret_encrypted)
+        if not secret or not verify_code(secret, code):
+            return Response({'error': 'Invalid code'}, status=status.HTTP_400_BAD_REQUEST)
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'user': UserSerializer(user).data,
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }, status=status.HTTP_200_OK)

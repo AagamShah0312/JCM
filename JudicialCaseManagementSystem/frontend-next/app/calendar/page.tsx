@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, CalendarDays, CheckSquare } from 'lucide-react';
 import AppShell from '@/components/AppShell';
@@ -20,9 +21,11 @@ function iso(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-export default function CalendarPage() {
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
-  const [selectedDate, setSelectedDate] = useState<string | null>(iso(new Date()));
+function CalendarInner() {
+  const searchParams = useSearchParams();
+  const paramDate = searchParams.get('date');
+  const [month, setMonth] = useState(() => startOfMonth(paramDate ? new Date(paramDate + 'T00:00:00') : new Date()));
+  const [selectedDate, setSelectedDate] = useState<string | null>(paramDate || iso(new Date()));
 
   const start = iso(month);
   const endIso = iso(addDays(new Date(month.getFullYear(), month.getMonth() + 1, 0), 1));
@@ -127,5 +130,15 @@ export default function CalendarPage() {
         </Card>
       </div>
     </AppShell>
+  );
+}
+
+
+// useSearchParams requires a Suspense boundary during static prerendering.
+export default function CalendarPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-brand-600" /></div>}>
+      <CalendarInner />
+    </Suspense>
   );
 }

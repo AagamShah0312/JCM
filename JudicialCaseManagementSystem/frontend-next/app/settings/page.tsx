@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { User, Lock, Save, ShieldCheck } from 'lucide-react';
+import { User, Lock, Save, ShieldCheck, QrCode, Trash2 } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 import { Card, SectionTitle, RoleBadge, Badge } from '@/components/ui';
 import { authApi } from '@/lib/services';
@@ -15,7 +15,6 @@ export default function SettingsPage() {
   const { user, fetchProfile } = useAuth();
 
   const profileQ = useQuery({ queryKey: ['profile'], queryFn: () => authApi.profile().then((r) => r.data) });
-  const mfaQ = useQuery({ queryKey: ['mfa'], queryFn: () => authApi.mfaStatus().then((r) => r.data) });
   const me = profileQ.data || user;
 
   const [profile, setProfile] = useState({
@@ -70,20 +69,7 @@ export default function SettingsPage() {
           </button>
         </Card>
 
-        <Card>
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700"><ShieldCheck size={16} /> Two-Factor Authentication (MFA-ready)</h3>
-          {mfaQ.isLoading ? <p className="text-sm text-slate-400">Checking…</p> : mfaQ.data && (
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <Badge tone={mfaQ.data.mfa_enabled ? 'green' : mfaQ.data.mfa_available ? 'amber' : 'slate'}>
-                  {mfaQ.data.mfa_enabled ? 'Enabled' : mfaQ.data.mfa_available ? 'Available' : 'Not available'}
-                </Badge>
-                {mfaQ.data.provider && <span className="text-xs text-slate-400">Provider: {mfaQ.data.provider}</span>}
-              </div>
-              <p className="text-xs text-slate-400">{mfaQ.data.note}</p>
-            </div>
-          )}
-        </Card>
+        <MfaCard />
 
         <Card>
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700"><Lock size={16} /> Change Password</h3>
@@ -105,5 +91,126 @@ export default function SettingsPage() {
         </Card>
       </div>
     </AppShell>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Two-Factor Authentication card (spec §46): status, enroll (QR),
+   verify, disable. Full TOTP flow supported by the backend.            */
+/* ------------------------------------------------------------------ */
+function MfaCard() {
+  const qc = useQueryClient();
+  const mfaQ = useQuery({ queryKey: ['mfa'], queryFn: () => authApi.mfaStatus().then((r) => r.data) });
+  const [enrollData, setEnrollData] = useState<any>(null);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['mfa'] });
+
+  const enroll = async () => {
+    setBusy(true);
+    try {
+      const r = await authApi.mfaEnroll();
+      setEnrollData(r.data);
+      toast.success('Scan the QR code with your authenticator app');
+    } catch (e: any) {
+      toast.error(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verify = async () => {
+    setBusy(true);
+    try {
+      await authApi.mfaVerify(code);
+      toast.success('Two-factor authentication enabled');
+      setEnrollData(null);
+      setCode('');
+      refresh();
+    } catch (e: any) {
+      toast.error(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async () => {
+    const c = window.prompt('Enter your current 6-digit code to disable 2FA:');
+    if (!c) return;
+    setBusy(true);
+    try {
+      await authApi.mfaDisable(c);
+      toast.success('Two-factor authentication disabled');
+      setCode('');
+      refresh();
+    } catch (e: any) {
+      toast.error(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (mfaQ.isLoading) return <Card><p className="text-sm text-slate-400">Checking…</p></Card>;
+
+  const enabled = mfaQ.data?.mfa_enabled;
+  const available = mfaQ.data?.mfa_available;
+
+  return (
+    <Card>
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700"><ShieldCheck size={16} /> Two-Factor Authentication</h3>
+
+      <div className="mb-3 flex items-center gap-2 text-sm">
+        <Badge tone={enabled ? 'green' : available ? 'amber' : 'slate'}>
+          {enabled ? 'Enabled' : available ? 'Available' : 'Not available'}
+        </Badge>
+        {mfaQ.data?.provider && <span className="text-xs text-slate-400">Provider: {mfaQ.data.provider}</span>}
+      </div>
+
+      {!available && (
+        <p className="text-xs text-slate-400">
+          {mfaQ.data?.note || 'MFA is disabled on this instance. Set MFA_ENABLED=True in the backend .env to activate.'}
+        </p>
+      )}
+
+      {available && !enabled && !enrollData && (
+        <button className="btn-secondary" disabled={busy} onClick={enroll}>
+          <QrCode size={15} /> {busy ? 'Generating…' : 'Set up authenticator app'}
+        </button>
+      )}
+
+      {enrollData && (
+        <div className="mt-2 space-y-3">
+          <div className="flex items-start gap-3 rounded-md bg-slate-50 p-3">
+            {enrollData.qr_png && <img src={enrollData.qr_png} alt="QR" className="h-36 w-36 rounded border border-slate-200 bg-white" />}
+            <div className="text-xs text-slate-500">
+              <p className="font-semibold text-slate-700">Scan with Google Authenticator / Authy</p>
+              <p className="mt-1">Account: <b>{enrollData.account}</b></p>
+              <p>Issuer: <b>{enrollData.issuer}</b></p>
+              <p className="mt-1">Or enter the secret manually:</p>
+              <code className="block break-all rounded bg-white px-2 py-1 font-mono text-[11px] text-slate-700">{enrollData.secret}</code>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="input w-40 text-center text-lg tracking-widest"
+              inputMode="numeric" maxLength={6} value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              placeholder="••••••"
+            />
+            <button className="btn-primary" disabled={busy || code.length !== 6} onClick={verify}>
+              {busy ? 'Verifying…' : 'Verify & Enable'}
+            </button>
+            <button className="btn-secondary" disabled={busy} onClick={() => setEnrollData(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {enabled && (
+        <button className="btn-danger" disabled={busy} onClick={disable}>
+          <Trash2 size={15} /> Disable two-factor authentication
+        </button>
+      )}
+    </Card>
   );
 }

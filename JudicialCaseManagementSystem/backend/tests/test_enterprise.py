@@ -6,7 +6,7 @@ Run: python manage.py test tests.test_enterprise
 """
 from datetime import date, timedelta
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework import status
@@ -455,3 +455,104 @@ class AIRetrievalPermissionTests(TestCase):
         from apps.ai.retrieval import retrieve_for_query
         chunks = retrieve_for_query(self.guest, self.case, 'anything')
         self.assertEqual(chunks, [])
+
+
+class TOTPMFATests(APITestCase):
+    """End-to-end TOTP MFA flow (spec §46): enroll → verify → challenge → disable."""
+
+    def setUp(self):
+        self.admin, *_ = make_users()
+        import pyotp
+        self.pyotp = pyotp
+        from apps.authentication.models import TwoFactorAuth
+        TwoFactorAuth.objects.filter(user=self.admin).delete()
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    @override_settings(MFA_ENABLED=True)
+    def test_full_totp_flow(self):
+        import pyotp
+        from django.test import override_settings
+        from apps.authentication.models import TwoFactorAuth
+
+        # Enroll
+        self._auth(self.admin)
+        resp = self.client.post('/api/auth/mfa/enroll/', {}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        secret = resp.data['secret']
+        self.assertEqual(len(secret), 32)
+        self.assertTrue(resp.data['qr_png'].startswith('data:image/png'))
+
+        # Wrong code rejected
+        resp = self.client.post('/api/auth/mfa/verify/', {'code': '000000'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Correct code enables
+        code = pyotp.TOTP(secret).now()
+        resp = self.client.post('/api/auth/mfa/verify/', {'code': code}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data['mfa_enabled'])
+
+        # Secret is encrypted at rest
+        tf = TwoFactorAuth.objects.get(user=self.admin)
+        self.assertNotEqual(tf.secret_encrypted, secret)
+        self.assertNotIn(secret, tf.secret_encrypted)
+
+        # Login requires MFA challenge
+        self.client.force_authenticate(None)
+        resp = self.client.post('/api/auth/login/', {'email': self.admin.email, 'password': 'Passw0rd!x'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data['mfa_required'])
+        token = resp.data['mfa_token']
+
+        # Wrong challenge code rejected
+        resp = self.client.post('/api/auth/mfa/challenge/', {'mfa_token': token, 'code': '000000'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Correct code returns JWT
+        code = pyotp.TOTP(secret).now()
+        resp = self.client.post('/api/auth/mfa/challenge/', {'mfa_token': token, 'code': code}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('access', resp.data)
+
+        # Disable
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {resp.data['access']}")
+        code = pyotp.TOTP(secret).now()
+        resp = self.client.post('/api/auth/mfa/disable/', {'code': code}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.data['mfa_enabled'])
+
+    def test_login_without_mfa_returns_access_directly(self):
+        self.client.force_authenticate(None)
+        resp = self.client.post('/api/auth/login/', {'email': self.admin.email, 'password': 'Passw0rd!x'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('access', resp.data)
+
+
+class PublicTrigramSearchTests(APITestCase):
+    """Public search uses pg_trgm ranking (spec §25/§67)."""
+
+    def setUp(self):
+        self.admin, self.judge, *_ = make_users()
+        self.case = make_case(self.admin, self.judge, None, public=True)
+
+    def test_partial_case_number_match(self):
+        resp = self.client.get('/api/public/cases/', {'search': self.case.case_number[:8]})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(resp.data['count'], 1)
+
+
+class DocumentChunkCollectionTests(TestCase):
+    """DocumentChunk.collection isolates case docs from future research (§75)."""
+
+    def setUp(self):
+        self.admin, self.judge, *_ = make_users()
+        self.case = make_case(self.admin, self.judge, None)
+
+    def test_collection_default(self):
+        from apps.documents.models import CaseDocument, DocumentChunk
+        doc = CaseDocument.objects.create(case=self.case, document_type='other',
+                                          file_name='x.txt', uploaded_by=self.admin)
+        chunk = DocumentChunk.objects.create(document=doc, case=self.case, chunk_index=0, text='x')
+        self.assertEqual(chunk.collection, 'case_documents')

@@ -43,6 +43,18 @@ class PublicCaseSearchView(APIView):
                 | Q(defendant_name__icontains=search)
                 | Q(parties__name__icontains=search)
             ).distinct()
+            # Rank by trigram similarity (pg_trgm) so the closest case-number
+            # / CNR match surfaces first (§25, §67). Fall back to plain
+            # ordering if the extension/function is unavailable.
+            try:
+                from django.contrib.postgres.search import TrigramSimilarity
+                ranked = qs.annotate(
+                    _sim=TrigramSimilarity('case_number', search)
+                ).order_by('-_sim', '-filing_date')
+                list(ranked[:1])  # force evaluation to surface errors here
+                qs = ranked
+            except Exception:
+                qs = qs.order_by('-filing_date')
 
         case_type = request.query_params.get('case_type')
         if case_type:

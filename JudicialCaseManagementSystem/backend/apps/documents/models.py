@@ -224,6 +224,10 @@ class DocumentChunk(models.Model):
     chunk_index = models.PositiveIntegerField()
     page_number = models.PositiveIntegerField(null=True, blank=True)
     text = models.TextField()
+    # Indexed collection (spec §75): case documents by default; future legal
+    # research collections (statutes, judgments, precedents) get their own
+    # value so unrelated cases are never mixed into a case-specific answer.
+    collection = models.CharField(max_length=100, default='case_documents', db_index=True)
     # pgvector embedding (VectorField from pgvector.django). The `vector`
     # extension + column are created in a dedicated migration so that the
     # extension exists before this field is added.

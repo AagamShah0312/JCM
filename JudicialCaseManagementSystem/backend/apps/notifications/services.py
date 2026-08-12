@@ -47,7 +47,37 @@ def send_notification_task(user_id, event_type, title, message, case_id=None, ac
         return {'error': 'user not found'}
     case = Case.objects.filter(id=case_id).first() if case_id else None
     notify_user(user, event_type, title, message, case=case, action_url=action_url)
+    # Optional email delivery (spec §28: in-app first, email/SMS/push later)
+    send_email_notification.delay(user.email, title, message, action_url)
     return {'sent': True}
+
+
+@shared_task
+def send_email_notification(to_email, title, message, action_url=''):
+    """
+    Deliver a notification by email when an email backend is configured
+    (EMAIL_HOST set). Falls back to console logging otherwise, so this is
+    safe in dev and on instances without mail configuration.
+    """
+    from django.conf import settings
+    try:
+        from django.core.mail import send_mail
+        body = f"{message}\n\nAction: {action_url}" if action_url else message
+        sent = send_mail(
+            subject=f"[JCM] {title}",
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[to_email],
+            fail_silently=True,
+        )
+        if sent:
+            logger.info(f"Email notification sent to {to_email}: {title}")
+            return {'email_sent': True}
+        logger.warning(f"Email notification not sent to {to_email}: {title} (no mail backend configured); in-app notification still delivered")
+        return {'email_sent': False, 'reason': 'mail backend not configured'}
+    except Exception as exc:
+        logger.warning(f"Email notification failed for {to_email}: {exc} (in-app notification still delivered)")
+        return {'email_sent': False, 'error': str(exc)}
 
 
 def notify_case_participants(case, event_type, title, message, action_url='', exclude_user=None):
