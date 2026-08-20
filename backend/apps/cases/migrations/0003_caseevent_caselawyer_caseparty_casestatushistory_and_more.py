@@ -85,14 +85,6 @@ class Migration(migrations.Migration):
                 ('is_active', models.BooleanField(default=True)),
             ],
         ),
-        migrations.RemoveField(
-            model_name='casetimeline',
-            name='case',
-        ),
-        migrations.RemoveField(
-            model_name='casetimeline',
-            name='created_by',
-        ),
         migrations.AddField(
             model_name='case',
             name='category',

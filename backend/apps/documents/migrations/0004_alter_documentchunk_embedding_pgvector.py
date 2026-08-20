@@ -4,6 +4,17 @@ from django.db import migrations, models
 import pgvector.django.vector
 
 
+def create_vector_extension(apps, schema_editor):
+    """pgvector is a PostgreSQL feature and must not run against SQLite tests."""
+    if schema_editor.connection.vendor == 'postgresql':
+        schema_editor.execute('CREATE EXTENSION IF NOT EXISTS vector;')
+
+
+def drop_vector_extension(apps, schema_editor):
+    if schema_editor.connection.vendor == 'postgresql':
+        schema_editor.execute('DROP EXTENSION IF EXISTS vector;')
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -13,10 +24,7 @@ class Migration(migrations.Migration):
     operations = [
         # pgvector extension must exist before the vector column is created.
         # (PostgreSQL only; the app requires PostgreSQL for vector features.)
-        migrations.RunSQL(
-            sql='CREATE EXTENSION IF NOT EXISTS vector;',
-            reverse_sql='DROP EXTENSION IF EXISTS vector;',
-        ),
+        migrations.RunPython(create_vector_extension, drop_vector_extension),
         # 0003 created the column as bytea (BinaryField). Replace it with a
         # real pgvector column (drop + recreate; no legacy data to preserve).
         migrations.RemoveField(

@@ -196,8 +196,10 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Security Settings for Production
 if not DEBUG:
-    LOCAL_HOSTS = {'localhost', '127.0.0.1'}
-    SECURE_SSL_REDIRECT = not all(host in LOCAL_HOSTS for host in ALLOWED_HOSTS if host)
+    # TLS termination is deployment-specific.  Inferring it from ALLOWED_HOSTS
+    # redirects local/test traffic (which also includes the Docker "backend"
+    # host) before API views can handle it.
+    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', cast=bool, default=False)
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
